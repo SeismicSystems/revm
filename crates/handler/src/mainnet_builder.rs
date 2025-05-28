@@ -1,14 +1,18 @@
 use crate::{instructions::EthInstructions, EthPrecompiles};
-use context::{BlockEnv, Cfg, CfgEnv, Context, Evm, Journal, TxEnv};
+use context::{BlockEnv, Cfg, CfgEnv, ChainStorageConfigTr, Context, Evm, EvmStorageConfig, Journal, TxEnv};
 use context_interface::{Block, Database, JournalTr, Transaction};
 use database_interface::EmptyDB;
 use interpreter::interpreter::EthInterpreter;
-use primitives::hardfork::SpecId;
+use primitives::{hardfork::SpecId, StorageValue};
 
 pub type MainnetEvm<CTX, INSP = ()> =
     Evm<CTX, INSP, EthInstructions<EthInterpreter, CTX>, EthPrecompiles>;
 
-pub type MainnetContext<DB> = Context<BlockEnv, TxEnv, CfgEnv, DB, Journal<DB>, ()>;
+pub type MainnetContext<DB>
+where 
+    DB: Database<StorageValue = StorageValue>,
+    Journal<DB>: JournalTr<Database = DB>,
+= Context<BlockEnv, TxEnv, CfgEnv, DB, Journal<DB>, EvmStorageConfig<StorageValue>>;
 
 pub trait MainBuilder: Sized {
     type Context;
@@ -24,8 +28,9 @@ where
     BLOCK: Block,
     TX: Transaction,
     CFG: Cfg,
-    DB: Database,
+    DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>,
     JOURNAL: JournalTr<Database = DB>,
+    CHAIN: ChainStorageConfigTr,
 {
     type Context = Self;
 
@@ -56,7 +61,12 @@ pub trait MainContext {
     fn mainnet() -> Self;
 }
 
-impl MainContext for Context<BlockEnv, TxEnv, CfgEnv, EmptyDB, Journal<EmptyDB>, ()> {
+impl MainContext for Context<BlockEnv, TxEnv, CfgEnv, EmptyDB, Journal<EmptyDB>, EvmStorageConfig<StorageValue>> 
+where
+    EmptyDB: Database<StorageValue = StorageValue>,
+    Journal<EmptyDB>: JournalTr<Database = EmptyDB>,
+
+{
     fn mainnet() -> Self {
         Context::new(EmptyDB::new(), SpecId::default())
     }

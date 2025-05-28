@@ -4,7 +4,7 @@ use interpreter::{
     interpreter::EthInterpreter, CallInputs, CallOutcome, CreateInputs, CreateOutcome,
     EOFCreateInputs, Interpreter, InterpreterTypes,
 };
-use primitives::{Address, Log, U256};
+use primitives::{Address, Log, StorageValueTr, U256};
 use state::EvmState;
 
 /// EVM hooks into execution.
@@ -144,38 +144,40 @@ pub trait Inspector<CTX, INTR: InterpreterTypes = EthInterpreter> {
 /// Extends the journal with additional methods that are used by the inspector.
 #[auto_impl(&mut, Box)]
 pub trait JournalExt {
+    type StorageValue: StorageValueTr;
     /// Get all logs from the journal.
     fn logs(&self) -> &[Log];
 
     /// Get the journal entries that are created from last checkpoint.
     /// new checkpoint is created when sub call is made.
-    fn journal(&self) -> &[JournalEntry];
+    fn journal(&self) -> &[JournalEntry<Self::StorageValue>];
 
     /// Return the current Journaled state.
-    fn evm_state(&self) -> &EvmState;
+    fn evm_state(&self) -> &EvmState<Self::StorageValue>;
 
     /// Return the mutable current Journaled state.
-    fn evm_state_mut(&mut self) -> &mut EvmState;
+    fn evm_state_mut(&mut self) -> &mut EvmState<Self::StorageValue>;
 }
 
 impl<DB: Database> JournalExt for Journal<DB> {
+    type StorageValue = DB::StorageValue;
     #[inline]
     fn logs(&self) -> &[Log] {
         &self.logs
     }
 
     #[inline]
-    fn journal(&self) -> &[JournalEntry] {
+    fn journal(&self) -> &[JournalEntry<Self::StorageValue>] {
         &self.journal
     }
 
     #[inline]
-    fn evm_state(&self) -> &EvmState {
+    fn evm_state(&self) -> &EvmState<Self::StorageValue> {
         &self.state
     }
 
     #[inline]
-    fn evm_state_mut(&mut self) -> &mut EvmState {
+    fn evm_state_mut(&mut self) -> &mut EvmState<Self::StorageValue> {
         &mut self.state
     }
 }

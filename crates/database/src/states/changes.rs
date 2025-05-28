@@ -1,6 +1,6 @@
 use super::RevertToSlot;
 use bytecode::Bytecode;
-use primitives::{Address, StorageKey, StorageValue, B256};
+use primitives::{Address, StorageKey, StorageValue, StorageValueTr, B256};
 use state::AccountInfo;
 use std::vec::Vec;
 
@@ -12,11 +12,11 @@ use std::vec::Vec;
 /// **Note**: That data is **not** sorted. Some database benefit of faster inclusion
 /// and smaller footprint if data is inserted in sorted order.
 #[derive(Clone, Debug, Default)]
-pub struct StateChangeset {
+pub struct StateChangeset<SV: StorageValueTr = StorageValue> {
     /// Vector of **not** sorted accounts information.
     pub accounts: Vec<(Address, Option<AccountInfo>)>,
     /// Vector of **not** sorted storage.
-    pub storage: Vec<PlainStorageChangeset>,
+    pub storage: Vec<PlainStorageChangeset<SV>>,
     /// Vector of contracts by bytecode hash. **not** sorted.
     pub contracts: Vec<(B256, Bytecode)>,
 }
@@ -25,20 +25,20 @@ pub struct StateChangeset {
 ///
 /// Used to apply storage changes of plain state to the database.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct PlainStorageChangeset {
+pub struct PlainStorageChangeset<SV: StorageValueTr = StorageValue> {
     /// Address of account
     pub address: Address,
     /// Wipe storage
     pub wipe_storage: bool,
     /// Storage key value pairs
-    pub storage: Vec<(StorageKey, StorageValue)>,
+    pub storage: Vec<(StorageKey, SV)>,
 }
 
 /// Plain Storage Revert.
 ///
 /// [`PlainStorageRevert`] contains old values of changed storage.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct PlainStorageRevert {
+pub struct PlainStorageRevert<SV: StorageValueTr = StorageValue> {
     /// Address of account
     pub address: Address,
     /// Whether storage is wiped in this revert
@@ -49,23 +49,23 @@ pub struct PlainStorageRevert {
     /// Contains the storage key and old values of that storage
     ///
     /// **Note**: Reverts are **not** sorted.
-    pub storage_revert: Vec<(StorageKey, RevertToSlot)>,
+    pub storage_revert: Vec<(StorageKey, RevertToSlot<SV>)>,
 }
 
 /// Plain state reverts are used to easily store reverts into database.
 ///
 /// Note that accounts are assumed **not** sorted.
 #[derive(Clone, Debug, Default)]
-pub struct PlainStateReverts {
+pub struct PlainStateReverts<SV: StorageValueTr = StorageValue> {
     /// Vector of account with removed contracts bytecode.
     ///
     /// **Note**: If AccountInfo is None means that account needs to be removed.
     pub accounts: Vec<Vec<(Address, Option<AccountInfo>)>>,
     /// Vector of storage with its address.
-    pub storage: Vec<Vec<PlainStorageRevert>>,
+    pub storage: Vec<Vec<PlainStorageRevert<SV>>>,
 }
 
-impl PlainStateReverts {
+impl<SV: StorageValueTr> PlainStateReverts<SV> {
     /// Constructs new [`PlainStateReverts`] with pre-allocated capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -76,4 +76,4 @@ impl PlainStateReverts {
 }
 
 /// Storage reverts
-pub type StorageRevert = Vec<Vec<(Address, bool, Vec<(StorageKey, RevertToSlot)>)>>;
+pub type StorageRevert<SV = StorageValue> = Vec<(StorageKey, RevertToSlot<SV>)>;

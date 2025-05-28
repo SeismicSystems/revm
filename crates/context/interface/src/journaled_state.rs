@@ -32,21 +32,21 @@ pub trait JournalTr {
         &mut self,
         address: Address,
         key: StorageKey,
-    ) -> Result<StateLoad<StorageValue>, <Self::Database as Database>::Error>;
+    ) -> Result<StateLoad<<Self::Database as Database>::StorageValue>, <Self::Database as Database>::Error>;
 
     /// Stores the storage value in Journal state.
     fn sstore(
         &mut self,
         address: Address,
         key: StorageKey,
-        value: StorageValue,
-    ) -> Result<StateLoad<SStoreResult>, <Self::Database as Database>::Error>;
+        value: <Self::Database as Database>::StorageValue,
+    ) -> Result<StateLoad<SStoreResult<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error>;
 
     /// Loads transient storage value.
-    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue;
+    fn tload(&mut self, address: Address, key: StorageKey) -> <Self::Database as Database>::StorageValue;
 
     /// Stores transient storage value.
-    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue);
+    fn tstore(&mut self, address: Address, key: StorageKey, value: <Self::Database as Database>::StorageValue);
 
     /// Logs the log in Journal state.
     fn log(&mut self, log: Log);
@@ -98,13 +98,13 @@ pub trait JournalTr {
     fn load_account(
         &mut self,
         address: Address,
-    ) -> Result<StateLoad<&mut Account>, <Self::Database as Database>::Error>;
+    ) -> Result<StateLoad<&mut Account<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error>;
 
     /// Loads the account code.
     fn load_account_code(
         &mut self,
         address: Address,
-    ) -> Result<StateLoad<&mut Account>, <Self::Database as Database>::Error>;
+    ) -> Result<StateLoad<&mut Account<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error>;
 
     /// Loads the account delegated.
     fn load_account_delegated(

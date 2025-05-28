@@ -3,7 +3,7 @@ use context_interface::{
     journaled_state::AccountLoad,
     Block, Cfg, Database, JournalTr, LocalContextTr, Transaction, TransactionType,
 };
-use primitives::{Address, Bytes, Log, StorageKey, StorageValue, B256, U256};
+use primitives::{Address, Bytes, Log, StorageKey, StorageValue, StorageValueTr, B256, U256};
 
 use crate::instructions::utility::IntoU256;
 
@@ -13,6 +13,7 @@ use crate::instructions::utility::IntoU256;
 ///
 /// There are few groups of functions which are Block, Transaction, Config, Database and Journal functions.
 pub trait Host {
+    type StorageValue: StorageValueTr;
     /* Block */
 
     /// Block basefee, calls ContextTr::block().basefee()
@@ -71,15 +72,15 @@ pub trait Host {
         &mut self,
         address: Address,
         key: StorageKey,
-        value: StorageValue,
-    ) -> Option<StateLoad<SStoreResult>>;
+        value: Self::StorageValue,
+    ) -> Option<StateLoad<SStoreResult<Self::StorageValue>>>;
 
     /// Sload, calls `ContextTr::journal().sload(address, key)`
-    fn sload(&mut self, address: Address, key: StorageKey) -> Option<StateLoad<StorageValue>>;
+    fn sload(&mut self, address: Address, key: StorageKey) -> Option<StateLoad<Self::StorageValue>>;
     /// Tstore, calls `ContextTr::journal().tstore(address, key, value)`
-    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue);
+    fn tstore(&mut self, address: Address, key: StorageKey, value: Self::StorageValue);
     /// Tload, calls `ContextTr::journal().tload(address, key)`
-    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue;
+    fn tload(&mut self, address: Address, key: StorageKey) -> Self::StorageValue;
     /// Balance, calls `ContextTr::journal().load_account(address)`
     fn balance(&mut self, address: Address) -> Option<StateLoad<U256>>;
     /// Load account delegated, calls `ContextTr::journal().load_account_delegated(address)`
@@ -91,6 +92,7 @@ pub trait Host {
 }
 
 impl<CTX: ContextTr> Host for CTX {
+    type StorageValue =  <<CTX as ContextTr>::Db as Database>::StorageValue;
     /* Block */
 
     fn basefee(&self) -> U256 {
@@ -215,7 +217,7 @@ impl<CTX: ContextTr> Host for CTX {
     }
 
     /// Gets storage value of `address` at `index` and if the account is cold.
-    fn sload(&mut self, address: Address, index: StorageKey) -> Option<StateLoad<StorageValue>> {
+    fn sload(&mut self, address: Address, index: StorageKey) -> Option<StateLoad<Self::StorageValue>> {
         self.journal()
             .sload(address, index)
             .map_err(|e| {
@@ -231,8 +233,8 @@ impl<CTX: ContextTr> Host for CTX {
         &mut self,
         address: Address,
         index: StorageKey,
-        value: StorageValue,
-    ) -> Option<StateLoad<SStoreResult>> {
+        value: Self::StorageValue,
+    ) -> Option<StateLoad<SStoreResult<Self::StorageValue>>> {
         self.journal()
             .sstore(address, index, value)
             .map_err(|e| {
@@ -242,12 +244,12 @@ impl<CTX: ContextTr> Host for CTX {
     }
 
     /// Gets the transient storage value of `address` at `index`.
-    fn tload(&mut self, address: Address, index: StorageKey) -> StorageValue {
+    fn tload(&mut self, address: Address, index: StorageKey) -> Self::StorageValue {
         self.journal().tload(address, index)
     }
 
     /// Sets the transient storage value of `address` at `index`.
-    fn tstore(&mut self, address: Address, index: StorageKey, value: StorageValue) {
+    fn tstore(&mut self, address: Address, index: StorageKey, value: Self::StorageValue) {
         self.journal().tstore(address, index, value)
     }
 
@@ -272,9 +274,11 @@ impl<CTX: ContextTr> Host for CTX {
 }
 
 /// Dummy host that implements [`Host`] trait and  returns all default values.
-pub struct DummyHost;
+pub struct DummyHost<SV: StorageValueTr = primitives::StorageValue>(core::marker::PhantomData<SV>);
 
-impl Host for DummyHost {
+impl<SV: StorageValueTr> Host for DummyHost<SV> {
+    type StorageValue = SV;
+
     fn basefee(&self) -> U256 {
         U256::ZERO
     }
@@ -349,19 +353,19 @@ impl Host for DummyHost {
         &mut self,
         _address: Address,
         _key: StorageKey,
-        _value: StorageValue,
-    ) -> Option<StateLoad<SStoreResult>> {
+        _value: Self::StorageValue,
+    ) -> Option<StateLoad<SStoreResult<Self::StorageValue>>> {
         None
     }
 
-    fn sload(&mut self, _address: Address, _key: StorageKey) -> Option<StateLoad<StorageValue>> {
+    fn sload(&mut self, _address: Address, _key: StorageKey) -> Option<StateLoad<Self::StorageValue>> {
         None
     }
 
-    fn tstore(&mut self, _address: Address, _key: StorageKey, _value: StorageValue) {}
+    fn tstore(&mut self, _address: Address, _key: StorageKey, _value: Self::StorageValue) {}
 
-    fn tload(&mut self, _address: Address, _key: StorageKey) -> StorageValue {
-        StorageValue::ZERO
+    fn tload(&mut self, _address: Address, _key: StorageKey) -> Self::StorageValue {
+       Self::StorageValue::from(StorageValue::ZERO) 
     }
 
     fn balance(&mut self, _address: Address) -> Option<StateLoad<U256>> {
@@ -378,5 +382,11 @@ impl Host for DummyHost {
 
     fn load_account_code_hash(&mut self, _address: Address) -> Option<StateLoad<B256>> {
         None
+    }
+}
+
+impl<SV: StorageValueTr + Default> Default for DummyHost<SV> {
+    fn default() -> Self {
+        DummyHost(core::marker::PhantomData)
     }
 }

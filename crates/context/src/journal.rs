@@ -15,7 +15,7 @@ use context_interface::{
 };
 use core::ops::{Deref, DerefMut};
 use database_interface::Database;
-use primitives::{hardfork::SpecId, Address, HashSet, Log, StorageKey, StorageValue, B256, U256};
+use primitives::{hardfork::SpecId, Address, HashSet, Log, StorageKey, StorageValue, StorageValueTr, B256, U256};
 use state::{Account, EvmState};
 use std::vec::Vec;
 
@@ -26,9 +26,10 @@ use std::vec::Vec;
 /// The journal contains every state change that happens within that call, making it possible to revert changes made in a specific call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Journal<DB, ENTRY = JournalEntry>
+pub struct Journal<DB, ENTRY=JournalEntry<<DB as Database>::StorageValue>> 
 where
-    ENTRY: JournalEntryTr,
+    DB: Database,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue>,
 {
     /// Database
     pub database: DB,
@@ -38,7 +39,8 @@ where
 
 impl<DB, ENTRY> Deref for Journal<DB, ENTRY>
 where
-    ENTRY: JournalEntryTr,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue>,
+    DB: Database,
 {
     type Target = JournalInner<ENTRY>;
 
@@ -49,14 +51,19 @@ where
 
 impl<DB, ENTRY> DerefMut for Journal<DB, ENTRY>
 where
-    ENTRY: JournalEntryTr,
+    DB: Database,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue>,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl<DB, ENTRY: JournalEntryTr> Journal<DB, ENTRY> {
+impl<DB, ENTRY> Journal<DB, ENTRY> 
+where
+    DB: Database,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue>
+{
     /// Creates a new JournaledState by copying state data from a JournalInit and provided database.
     /// This allows reusing the state, logs, and other data from a previous execution context while
     /// connecting it to a different database backend.
@@ -71,8 +78,11 @@ impl<DB, ENTRY: JournalEntryTr> Journal<DB, ENTRY> {
         self.inner
     }
 }
-
-impl<DB, ENTRY: JournalEntryTr + Clone> Journal<DB, ENTRY> {
+impl<DB, ENTRY> Journal<DB, ENTRY>
+where
+    DB: Database,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue> + Clone
+{
     /// Creates a new [`JournalInner`] by cloning all internal state data (state, storage, logs, etc)
     /// This allows creating a new journaled state with the same state data but without
     /// carrying over the original database.
@@ -87,20 +97,24 @@ impl<DB, ENTRY: JournalEntryTr + Clone> Journal<DB, ENTRY> {
 /// Output of the journal after finalizing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct JournalOutput {
+pub struct JournalOutput<SV: StorageValueTr = StorageValue> {
     /// Changes or touched accounts that loads, created or changed in the journal.
-    pub state: EvmState,
+    pub state: EvmState<SV>,
     /// Logs that were emitted by contract calls.
     pub logs: Vec<Log>,
 }
 
-impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
+impl<DB, ENTRY> JournalTr for Journal<DB, ENTRY>
+where
+    DB: Database,
+    ENTRY: JournalEntryTr<StorageValue = <DB as Database>::StorageValue>, 
+{
     type Database = DB;
-    type FinalOutput = JournalOutput;
+    type FinalOutput = JournalOutput<<DB as Database>::StorageValue>;
 
     fn new(database: DB) -> Journal<DB, ENTRY> {
         Self {
-            inner: JournalInner::new(),
+            inner: JournalInner::<ENTRY>::new(),
             database,
         }
     }
@@ -117,7 +131,7 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
         &mut self,
         address: Address,
         key: StorageKey,
-    ) -> Result<StateLoad<StorageValue>, <Self::Database as Database>::Error> {
+    ) -> Result<StateLoad<<Self::Database as Database>::StorageValue>, <Self::Database as Database>::Error> {
         self.inner.sload(&mut self.database, address, key)
     }
 
@@ -125,16 +139,16 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
         &mut self,
         address: Address,
         key: StorageKey,
-        value: StorageValue,
-    ) -> Result<StateLoad<SStoreResult>, <Self::Database as Database>::Error> {
+        value: <Self::Database as Database>::StorageValue,
+    ) -> Result<StateLoad<SStoreResult<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error> {
         self.inner.sstore(&mut self.database, address, key, value)
     }
 
-    fn tload(&mut self, address: Address, key: StorageKey) -> StorageValue {
+    fn tload(&mut self, address: Address, key: StorageKey) -> <Self::Database as Database>::StorageValue {
         self.inner.tload(address, key)
     }
 
-    fn tstore(&mut self, address: Address, key: StorageKey, value: StorageValue) {
+    fn tstore(&mut self, address: Address, key: StorageKey, value: <Self::Database as Database>::StorageValue) {
         self.inner.tstore(address, key, value)
     }
 
@@ -207,7 +221,7 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     }
 
     #[inline]
-    fn load_account(&mut self, address: Address) -> Result<StateLoad<&mut Account>, DB::Error> {
+    fn load_account(&mut self, address: Address) -> Result<StateLoad<&mut Account<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error> {
         self.inner.load_account(&mut self.database, address)
     }
 
@@ -215,7 +229,7 @@ impl<DB: Database, ENTRY: JournalEntryTr> JournalTr for Journal<DB, ENTRY> {
     fn load_account_code(
         &mut self,
         address: Address,
-    ) -> Result<StateLoad<&mut Account>, DB::Error> {
+    ) -> Result<StateLoad<&mut Account<<Self::Database as Database>::StorageValue>>, <Self::Database as Database>::Error> {
         self.inner.load_code(&mut self.database, address)
     }
 

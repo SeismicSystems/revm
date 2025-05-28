@@ -1,6 +1,6 @@
 use crate::DatabaseCommit;
 use core::{convert::Infallible, error::Error, fmt};
-use primitives::{Address, HashMap};
+use primitives::{Address, HashMap, StorageValueTr};
 use state::Account;
 use std::sync::Arc;
 
@@ -12,9 +12,13 @@ use std::sync::Arc;
 pub trait TryDatabaseCommit {
     /// Error type for when [`TryDatabaseCommit::try_commit`] fails.
     type Error: Error;
+    type StorageValue: StorageValueTr;
 
     /// Attempt to commit changes to the database.
-    fn try_commit(&mut self, changes: HashMap<Address, Account>) -> Result<(), Self::Error>;
+    fn try_commit(
+        &mut self,
+        changes: HashMap<Address, Account<Self::StorageValue>>,
+    ) -> Result<(), Self::Error>;
 }
 
 impl<Db> TryDatabaseCommit for Db
@@ -22,9 +26,13 @@ where
     Db: DatabaseCommit,
 {
     type Error = Infallible;
+    type StorageValue = Db::StorageValue;
 
     #[inline]
-    fn try_commit(&mut self, changes: HashMap<Address, Account>) -> Result<(), Self::Error> {
+    fn try_commit(
+        &mut self,
+        changes: HashMap<Address, Account<Self::StorageValue>>,
+    ) -> Result<(), Self::Error> {
         self.commit(changes);
         Ok(())
     }
@@ -48,9 +56,13 @@ where
     Db: DatabaseCommit + Send + Sync,
 {
     type Error = ArcUpgradeError;
+    type StorageValue = Db::StorageValue;
 
     #[inline]
-    fn try_commit(&mut self, changes: HashMap<Address, Account>) -> Result<(), Self::Error> {
+    fn try_commit(
+        &mut self,
+        changes: HashMap<Address, Account<Self::StorageValue>>,
+    ) -> Result<(), Self::Error> {
         Arc::get_mut(self)
             .map(|db| db.commit(changes))
             .ok_or(ArcUpgradeError)
@@ -59,6 +71,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use primitives::StorageValue;
+
     use super::*;
     use crate::DatabaseCommit;
     use std::sync::Arc;
@@ -66,7 +80,8 @@ mod test {
     struct MockDb;
 
     impl DatabaseCommit for MockDb {
-        fn commit(&mut self, _changes: HashMap<Address, Account>) {}
+        type StorageValue = StorageValue;
+        fn commit(&mut self, _changes: HashMap<Address, Account<Self::StorageValue>>) {}
     }
 
     #[test]

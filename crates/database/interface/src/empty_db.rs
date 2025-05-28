@@ -1,60 +1,63 @@
 use crate::{DBErrorMarker, Database, DatabaseRef};
 use core::error::Error;
 use core::{convert::Infallible, fmt, marker::PhantomData};
-use primitives::{keccak256, Address, StorageKey, StorageValue, B256};
+use primitives::{keccak256, Address, StorageKey, StorageValueTr, B256};
 use state::{AccountInfo, Bytecode};
 use std::string::ToString;
 
 /// An empty database that always returns default values when queried
-pub type EmptyDB = EmptyDBTyped<Infallible>;
+pub type EmptyDB = EmptyDBTyped<Infallible, primitives::StorageValue>;
 
 /// An empty database that always returns default values when queried
 ///
 /// This is generic over a type which is used as the database error type.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct EmptyDBTyped<E> {
+pub struct EmptyDBTyped<E, SV: StorageValueTr = primitives::StorageValue> {
     _phantom: PhantomData<E>,
+    _phantom2: PhantomData<SV>,
 }
 
 // Don't derive traits, because the type parameter is unused.
-impl<E> Clone for EmptyDBTyped<E> {
+impl<E, SV: StorageValueTr> Clone for EmptyDBTyped<E, SV> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<E> Copy for EmptyDBTyped<E> {}
+impl<E, SV: StorageValueTr> Copy for EmptyDBTyped<E, SV> {}
 
-impl<E> Default for EmptyDBTyped<E> {
+impl<E, SV: StorageValueTr> Default for EmptyDBTyped<E, SV> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<E> fmt::Debug for EmptyDBTyped<E> {
+impl<E, SV: StorageValueTr> fmt::Debug for EmptyDBTyped<E, SV> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EmptyDB").finish_non_exhaustive()
     }
 }
 
-impl<E> PartialEq for EmptyDBTyped<E> {
+impl<E, SV: StorageValueTr> PartialEq for EmptyDBTyped<E, SV> {
     fn eq(&self, _: &Self) -> bool {
         true
     }
 }
 
-impl<E> Eq for EmptyDBTyped<E> {}
+impl<E, SV: StorageValueTr> Eq for EmptyDBTyped<E, SV> {}
 
-impl<E> EmptyDBTyped<E> {
+impl<E, SV: StorageValueTr> EmptyDBTyped<E, SV> {
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,
+            _phantom2: PhantomData,
         }
     }
 }
 
-impl<E: DBErrorMarker + Error> Database for EmptyDBTyped<E> {
+impl<E: DBErrorMarker + Error, SV: StorageValueTr> Database for EmptyDBTyped<E, SV> {
     type Error = E;
+    type StorageValue = SV;
 
     #[inline]
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -71,7 +74,7 @@ impl<E: DBErrorMarker + Error> Database for EmptyDBTyped<E> {
         &mut self,
         address: Address,
         index: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
+    ) -> Result<Self::StorageValue, Self::Error> {
         <Self as DatabaseRef>::storage_ref(self, address, index)
     }
 
@@ -81,8 +84,9 @@ impl<E: DBErrorMarker + Error> Database for EmptyDBTyped<E> {
     }
 }
 
-impl<E: DBErrorMarker + Error> DatabaseRef for EmptyDBTyped<E> {
+impl<E: DBErrorMarker + Error, SV: StorageValueTr> DatabaseRef for EmptyDBTyped<E, SV> {
     type Error = E;
+    type StorageValue = SV;
 
     #[inline]
     fn basic_ref(&self, _address: Address) -> Result<Option<AccountInfo>, Self::Error> {
@@ -99,8 +103,8 @@ impl<E: DBErrorMarker + Error> DatabaseRef for EmptyDBTyped<E> {
         &self,
         _address: Address,
         _index: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
-        Ok(StorageValue::default())
+    ) -> Result<Self::StorageValue, Self::Error> {
+        Ok(Self::StorageValue::default())
     }
 
     #[inline]

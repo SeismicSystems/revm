@@ -1,7 +1,7 @@
 pub use crate::journaled_state::StateLoad;
-use crate::{Block, Cfg, Database, JournalTr, LocalContextTr, Transaction};
+use crate::{Block, Cfg, ChainStorageConfigTr, Database, JournalTr, LocalContextTr, Transaction};
 use auto_impl::auto_impl;
-use primitives::StorageValue;
+use primitives::{StorageValue, StorageValueTr, U256};
 use std::string::String;
 
 /// Trait that defines the context of the EVM execution.
@@ -18,11 +18,11 @@ pub trait ContextTr {
     /// Configuration type
     type Cfg: Cfg;
     /// Database type
-    type Db: Database;
+    type Db: Database<StorageValue = <Self::Chain as ChainStorageConfigTr>::StorageValue>;
     /// Journal type
     type Journal: JournalTr<Database = Self::Db>;
     /// Chain type
-    type Chain;
+    type Chain: ChainStorageConfigTr;
     /// Local context type
     type Local: LocalContextTr;
 
@@ -75,16 +75,16 @@ impl<DbError> From<DbError> for ContextError<DbError> {
 /// Represents the result of an `sstore` operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SStoreResult {
+pub struct SStoreResult<SV: StorageValueTr = StorageValue> {
     /// Value of the storage when it is first read
-    pub original_value: StorageValue,
+    pub original_value: SV,
     /// Current value of the storage
-    pub present_value: StorageValue,
+    pub present_value: SV,
     /// New value that is set
-    pub new_value: StorageValue,
+    pub new_value: SV,
 }
 
-impl SStoreResult {
+impl<SV: StorageValueTr> SStoreResult<SV> {
     /// Returns `true` if the new value is equal to the present value.
     #[inline]
     pub fn is_new_eq_present(&self) -> bool {
@@ -119,6 +119,15 @@ impl SStoreResult {
     #[inline]
     pub fn is_new_zero(&self) -> bool {
         self.new_value.is_zero()
+    }
+
+    #[inline]
+    pub fn to_u256_result(&self) -> SStoreResult<U256> {
+        SStoreResult {
+            original_value: self.original_value.to_u256(),
+            present_value: self.present_value.to_u256(),
+            new_value: self.new_value.to_u256(),
+        }
     }
 }
 

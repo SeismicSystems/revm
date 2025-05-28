@@ -122,7 +122,7 @@ mod test {
     use crate::{host::DummyHost, instruction_table, InstructionResult};
     use bytecode::opcode::{DUPN, EXCHANGE, STOP, SWAPN};
     use bytecode::Bytecode;
-    use primitives::{Bytes, U256};
+    use primitives::{Bytes, StorageValue, U256};
 
     #[test]
     fn dupn() {
@@ -130,7 +130,7 @@ mod test {
         let mut interpreter = Interpreter::default().with_bytecode(bytecode);
 
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         interpreter.runtime_flag.is_eof = true;
         let _ = interpreter.stack.push(U256::from(10));
@@ -152,7 +152,7 @@ mod test {
         let mut interpreter = Interpreter::default().with_bytecode(bytecode);
 
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         interpreter.runtime_flag.is_eof = true;
 
         let _ = interpreter.stack.push(U256::from(10));
@@ -172,7 +172,7 @@ mod test {
         let mut interpreter = Interpreter::default().with_bytecode(bytecode);
 
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         interpreter.runtime_flag.is_eof = true;
 
         let _ = interpreter.stack.push(U256::from(1));

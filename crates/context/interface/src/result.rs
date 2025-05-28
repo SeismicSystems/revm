@@ -1,7 +1,7 @@
 use crate::transaction::TransactionError;
 use core::fmt::{self, Debug};
 use database_interface::DBErrorMarker;
-use primitives::{Address, Bytes, Log, U256};
+use primitives::{Address, Bytes, Log, StorageValue, StorageValueTr, U256};
 use state::EvmState;
 use std::{boxed::Box, string::String, vec::Vec};
 
@@ -11,16 +11,16 @@ impl<T> HaltReasonTr for T where T: Clone + Debug + PartialEq + Eq + From<HaltRe
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ResultAndState<HaltReasonTy = HaltReason> {
+pub struct ResultAndState<HaltReasonTy = HaltReason, SV: StorageValueTr = StorageValue> {
     /// Status of execution
     pub result: ExecutionResult<HaltReasonTy>,
     /// State that got updated
-    pub state: EvmState,
+    pub state: EvmState<SV>,
 }
 
-impl<HaltReasonTy> ResultAndState<HaltReasonTy> {
+impl<HaltReasonTy, SV: StorageValueTr> ResultAndState<HaltReasonTy, SV> {
     /// Maps a `DBError` to a new error type using the provided closure, leaving other variants unchanged.
-    pub fn map_haltreason<F, OHR>(self, op: F) -> ResultAndState<OHR>
+    pub fn map_haltreason<F, OHR>(self, op: F) -> ResultAndState<OHR, SV>
     where
         F: FnOnce(HaltReasonTy) -> OHR,
     {

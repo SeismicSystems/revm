@@ -1,12 +1,11 @@
 //! This module contains [`Context`] struct and implements [`ContextTr`] trait for it.
-use crate::{block::BlockEnv, cfg::CfgEnv, journal::Journal, tx::TxEnv, LocalContext};
+use crate::{block::BlockEnv, cfg::CfgEnv, journal::Journal, tx::TxEnv, EvmStorageConfig, LocalContext};
 use context_interface::{
-    context::{ContextError, ContextSetters},
-    Block, Cfg, ContextTr, JournalTr, LocalContextTr, Transaction,
+    context::{ContextError, ContextSetters}, Block, Cfg, ChainStorageConfigTr, ContextTr, JournalTr, LocalContextTr, Transaction
 };
 use database_interface::{Database, DatabaseRef, EmptyDB, WrapDatabaseRef};
 use derive_where::derive_where;
-use primitives::hardfork::SpecId;
+use primitives::{hardfork::SpecId, StorageValue};
 
 /// EVM context contains data that EVM needs for execution.
 #[derive_where(Clone, Debug; BLOCK, CFG, CHAIN, TX, DB, JOURNAL, <DB as Database>::Error, LOCAL)]
@@ -14,9 +13,9 @@ pub struct Context<
     BLOCK = BlockEnv,
     TX = TxEnv,
     CFG = CfgEnv,
-    DB: Database = EmptyDB,
+    DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue> = EmptyDB,
     JOURNAL: JournalTr<Database = DB> = Journal<DB>,
-    CHAIN = (),
+    CHAIN: ChainStorageConfigTr = EvmStorageConfig<StorageValue>,
     LOCAL: LocalContextTr = LocalContext,
 > {
     /// Block information.
@@ -38,10 +37,10 @@ pub struct Context<
 impl<
         BLOCK: Block,
         TX: Transaction,
-        DB: Database,
+        DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>,
         CFG: Cfg,
         JOURNAL: JournalTr<Database = DB>,
-        CHAIN,
+        CHAIN: ChainStorageConfigTr,
         LOCAL: LocalContextTr,
     > ContextTr for Context<BLOCK, TX, CFG, DB, JOURNAL, CHAIN, LOCAL>
 {
@@ -109,10 +108,10 @@ impl<
 impl<
         BLOCK: Block,
         TX: Transaction,
-        DB: Database,
+        DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>,
         CFG: Cfg,
         JOURNAL: JournalTr<Database = DB>,
-        CHAIN,
+        CHAIN: ChainStorageConfigTr,
     > ContextSetters for Context<BLOCK, TX, CFG, DB, JOURNAL, CHAIN>
 {
     fn set_tx(&mut self, tx: Self::Tx) {
@@ -127,9 +126,9 @@ impl<
 impl<
         BLOCK: Block + Default,
         TX: Transaction + Default,
-        DB: Database,
+        DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>,
         JOURNAL: JournalTr<Database = DB>,
-        CHAIN: Default,
+        CHAIN: ChainStorageConfigTr + Default,
     > Context<BLOCK, TX, CfgEnv, DB, JOURNAL, CHAIN>
 {
     /// Creates a new context with a new database type.
@@ -158,8 +157,9 @@ where
     BLOCK: Block,
     TX: Transaction,
     CFG: Cfg,
-    DB: Database,
+    DB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>,
     JOURNAL: JournalTr<Database = DB>,
+    CHAIN: ChainStorageConfigTr,
 {
     /// Creates a new context with a new journal type. New journal needs to have the same database type.
     pub fn with_new_journal<OJOURNAL: JournalTr<Database = DB>>(
@@ -184,7 +184,8 @@ where
     pub fn with_db<ODB: Database>(
         self,
         db: ODB,
-    ) -> Context<BLOCK, TX, CFG, ODB, Journal<ODB>, CHAIN> {
+    ) -> Context<BLOCK, TX, CFG, ODB, Journal<ODB>, CHAIN> 
+    where ODB: Database<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue> {
         let spec = self.cfg.spec().into();
         let mut journaled_state = Journal::new(db);
         journaled_state.set_spec_id(spec);
@@ -203,7 +204,9 @@ where
     pub fn with_ref_db<ODB: DatabaseRef>(
         self,
         db: ODB,
-    ) -> Context<BLOCK, TX, CFG, WrapDatabaseRef<ODB>, Journal<WrapDatabaseRef<ODB>>, CHAIN> {
+    ) -> Context<BLOCK, TX, CFG, WrapDatabaseRef<ODB>, Journal<WrapDatabaseRef<ODB>>, CHAIN> 
+    where ODB: DatabaseRef<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>
+    {
         let spec = self.cfg.spec().into();
         let mut journaled_state = Journal::new(WrapDatabaseRef(db));
         journaled_state.set_spec_id(spec);
@@ -247,7 +250,10 @@ where
     }
 
     /// Creates a new context with a new chain type.
-    pub fn with_chain<OC>(self, chain: OC) -> Context<BLOCK, TX, CFG, DB, JOURNAL, OC> {
+    pub fn with_chain<OC: ChainStorageConfigTr>(self, chain: OC) -> Context<BLOCK, TX, CFG, DB, JOURNAL, OC> 
+        where 
+            OC: ChainStorageConfigTr<StorageValue = <CHAIN as ChainStorageConfigTr>::StorageValue>
+    {
         Context {
             tx: self.tx,
             block: self.block,

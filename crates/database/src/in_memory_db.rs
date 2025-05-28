@@ -1,8 +1,7 @@
 use core::convert::Infallible;
 use database_interface::{Database, DatabaseCommit, DatabaseRef, EmptyDB};
 use primitives::{
-    address, hash_map::Entry, Address, HashMap, Log, StorageKey, StorageValue, B256, KECCAK_EMPTY,
-    U256,
+    address, hash_map::Entry, Address, HashMap, Log, StorageKey, StorageValue, StorageValueTr, B256, KECCAK_EMPTY, U256
 };
 use state::{Account, AccountInfo, Bytecode};
 use std::vec::Vec;
@@ -17,10 +16,10 @@ pub type InMemoryDB = CacheDB<EmptyDB>;
 /// The [DbAccount] holds the code hash of the contract, which is used to look up the contract in the `contracts` map.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Cache {
+pub struct Cache<SV: StorageValueTr = StorageValue> {
     /// Account info where None means it is not existing. Not existing state is needed for Pre TANGERINE forks.
     /// `code` is always `None`, and bytecode can be found in `contracts`.
-    pub accounts: HashMap<Address, DbAccount>,
+    pub accounts: HashMap<Address, DbAccount<SV>>,
     /// Tracks all contracts by their code hash.
     pub contracts: HashMap<B256, Bytecode>,
     /// All logs that were committed via [DatabaseCommit::commit].
@@ -29,7 +28,7 @@ pub struct Cache {
     pub block_hashes: HashMap<U256, B256>,
 }
 
-impl Default for Cache {
+impl<SV: StorageValueTr> Default for Cache<SV> {
     fn default() -> Self {
         let mut contracts = HashMap::default();
         contracts.insert(KECCAK_EMPTY, Bytecode::default());
@@ -49,22 +48,22 @@ impl Default for Cache {
 /// This implementation wraps a [DatabaseRef] that is used to load data ([AccountInfo]).
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct CacheDB<ExtDB> {
+pub struct CacheDB<ExtDB: DatabaseRef> {
     /// The cache that stores all state changes.
-    pub cache: Cache,
+    pub cache: Cache<ExtDB::StorageValue>,
     /// The underlying database ([DatabaseRef]) that is used to load data.
     ///
     /// Note: This is read-only, data is never written to this database.
     pub db: ExtDB,
 }
 
-impl<ExtDB: Default> Default for CacheDB<ExtDB> {
+impl<ExtDB: DatabaseRef + Default> Default for CacheDB<ExtDB> {
     fn default() -> Self {
         Self::new(ExtDB::default())
     }
 }
 
-impl<ExtDb> CacheDB<CacheDB<ExtDb>> {
+impl<ExtDb: DatabaseRef> CacheDB<CacheDB<ExtDb>> {
     /// Flattens a nested cache by applying the outer cache to the inner cache.
     ///
     /// The behavior is as follows:
@@ -97,11 +96,11 @@ impl<ExtDb> CacheDB<CacheDB<ExtDb>> {
     }
 }
 
-impl<ExtDB> CacheDB<ExtDB> {
+impl<ExtDB: DatabaseRef> CacheDB<ExtDB> {
     /// Creates a new cache with the given external database.
     pub fn new(db: ExtDB) -> Self {
         Self {
-            cache: Cache::default(),
+            cache: Cache::<ExtDB::StorageValue>::default(),
             db,
         }
     }
@@ -144,13 +143,13 @@ impl<ExtDB: DatabaseRef> CacheDB<ExtDB> {
     /// Returns the account for the given address.
     ///
     /// If the account was not found in the cache, it will be loaded from the underlying database.
-    pub fn load_account(&mut self, address: Address) -> Result<&mut DbAccount, ExtDB::Error> {
+    pub fn load_account(&mut self, address: Address) -> Result<&mut DbAccount<ExtDB::StorageValue>, ExtDB::Error> {
         let db = &self.db;
         match self.cache.accounts.entry(address) {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(entry) => Ok(entry.insert(
                 db.basic_ref(address)?
-                    .map(|info| DbAccount {
+                    .map(|info| DbAccount::<ExtDB::StorageValue> {
                         info,
                         ..Default::default()
                     })
@@ -164,7 +163,7 @@ impl<ExtDB: DatabaseRef> CacheDB<ExtDB> {
         &mut self,
         address: Address,
         slot: StorageKey,
-        value: StorageValue,
+        value: ExtDB::StorageValue,
     ) -> Result<(), ExtDB::Error> {
         let account = self.load_account(address)?;
         account.storage.insert(slot, value);
@@ -175,7 +174,7 @@ impl<ExtDB: DatabaseRef> CacheDB<ExtDB> {
     pub fn replace_account_storage(
         &mut self,
         address: Address,
-        storage: HashMap<StorageKey, StorageValue>,
+        storage: HashMap<StorageKey, ExtDB::StorageValue>,
     ) -> Result<(), ExtDB::Error> {
         let account = self.load_account(address)?;
         account.account_state = AccountState::StorageCleared;
@@ -184,8 +183,9 @@ impl<ExtDB: DatabaseRef> CacheDB<ExtDB> {
     }
 }
 
-impl<ExtDB> DatabaseCommit for CacheDB<ExtDB> {
-    fn commit(&mut self, changes: HashMap<Address, Account>) {
+impl<ExtDB: DatabaseRef> DatabaseCommit for CacheDB<ExtDB> {
+    type StorageValue = ExtDB::StorageValue;
+    fn commit(&mut self, changes: HashMap<Address, Account<Self::StorageValue>>) {
         for (address, mut account) in changes {
             if !account.is_touched() {
                 continue;
@@ -224,6 +224,7 @@ impl<ExtDB> DatabaseCommit for CacheDB<ExtDB> {
 
 impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
     type Error = ExtDB::Error;
+    type StorageValue = ExtDB::StorageValue;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         let basic = match self.cache.accounts.entry(address) {
@@ -231,7 +232,7 @@ impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
             Entry::Vacant(entry) => entry.insert(
                 self.db
                     .basic_ref(address)?
-                    .map(|info| DbAccount {
+                    .map(|info| DbAccount::<ExtDB::StorageValue> {
                         info,
                         ..Default::default()
                     })
@@ -258,7 +259,7 @@ impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
         &mut self,
         address: Address,
         index: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
+    ) -> Result<ExtDB::StorageValue, Self::Error> {
         match self.cache.accounts.entry(address) {
             Entry::Occupied(mut acc_entry) => {
                 let acc_entry = acc_entry.get_mut();
@@ -269,7 +270,7 @@ impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
                             acc_entry.account_state,
                             AccountState::StorageCleared | AccountState::NotExisting
                         ) {
-                            Ok(StorageValue::ZERO)
+                            Ok(Self::StorageValue::from(StorageValue::ZERO))
                         } else {
                             let slot = self.db.storage_ref(address, index)?;
                             entry.insert(slot);
@@ -283,11 +284,11 @@ impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
                 let info = self.db.basic_ref(address)?;
                 let (account, value) = if info.is_some() {
                     let value = self.db.storage_ref(address, index)?;
-                    let mut account: DbAccount = info.into();
+                    let mut account: DbAccount::<Self::StorageValue> = info.into();
                     account.storage.insert(index, value);
                     (account, value)
                 } else {
-                    (info.into(), StorageValue::ZERO)
+                    (info.into(), Self::StorageValue::from(StorageValue::ZERO))
                 };
                 acc_entry.insert(account);
                 Ok(value)
@@ -309,6 +310,7 @@ impl<ExtDB: DatabaseRef> Database for CacheDB<ExtDB> {
 
 impl<ExtDB: DatabaseRef> DatabaseRef for CacheDB<ExtDB> {
     type Error = ExtDB::Error;
+    type StorageValue = ExtDB::StorageValue;
 
     fn basic_ref(&self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         match self.cache.accounts.get(&address) {
@@ -328,7 +330,7 @@ impl<ExtDB: DatabaseRef> DatabaseRef for CacheDB<ExtDB> {
         &self,
         address: Address,
         index: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
+    ) -> Result<Self::StorageValue, Self::Error> {
         match self.cache.accounts.get(&address) {
             Some(acc_entry) => match acc_entry.storage.get(&index) {
                 Some(entry) => Ok(*entry),
@@ -337,7 +339,7 @@ impl<ExtDB: DatabaseRef> DatabaseRef for CacheDB<ExtDB> {
                         acc_entry.account_state,
                         AccountState::StorageCleared | AccountState::NotExisting
                     ) {
-                        Ok(StorageValue::ZERO)
+                        Ok(Self::StorageValue::from(StorageValue::ZERO))
                     } else {
                         self.db.storage_ref(address, index)
                     }
@@ -357,15 +359,15 @@ impl<ExtDB: DatabaseRef> DatabaseRef for CacheDB<ExtDB> {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DbAccount {
+pub struct DbAccount<SV: StorageValueTr = StorageValue> {
     pub info: AccountInfo,
     /// If account is selfdestructed or newly created, storage will be cleared.
     pub account_state: AccountState,
     /// Storage slots
-    pub storage: HashMap<StorageKey, StorageValue>,
+    pub storage: HashMap<StorageKey, SV>,
 }
 
-impl DbAccount {
+impl<SV: StorageValueTr> DbAccount<SV> {
     pub fn new_not_existing() -> Self {
         Self {
             account_state: AccountState::NotExisting,
@@ -382,13 +384,13 @@ impl DbAccount {
     }
 }
 
-impl From<Option<AccountInfo>> for DbAccount {
+impl<SV: StorageValueTr> From<Option<AccountInfo>> for DbAccount<SV> {
     fn from(from: Option<AccountInfo>) -> Self {
         from.map(Self::from).unwrap_or_else(Self::new_not_existing)
     }
 }
 
-impl From<AccountInfo> for DbAccount {
+impl<SV: StorageValueTr> From<AccountInfo> for DbAccount<SV> {
     fn from(info: AccountInfo) -> Self {
         Self {
             info,
@@ -445,6 +447,7 @@ pub const BENCH_CALLER_BALANCE: U256 = U256::from_limbs([10_000_000, 0, 0, 0]);
 
 impl Database for BenchmarkDB {
     type Error = Infallible;
+    type StorageValue = StorageValue;
     /// Get basic account information.
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
         if address == BENCH_TARGET {
@@ -476,8 +479,8 @@ impl Database for BenchmarkDB {
         &mut self,
         _address: Address,
         _index: StorageKey,
-    ) -> Result<StorageValue, Self::Error> {
-        Ok(StorageValue::default())
+    ) -> Result<Self::StorageValue, Self::Error> {
+        Ok(Self::StorageValue::default())
     }
 
     // History related

@@ -1,16 +1,16 @@
 use super::TransitionAccount;
-use primitives::{hash_map::Entry, Address, HashMap};
+use primitives::{hash_map::Entry, Address, HashMap, StorageValue, StorageValueTr};
 use std::vec::Vec;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
-pub struct TransitionState {
+pub struct TransitionState<SV: StorageValueTr = StorageValue> {
     /// Block state account with account state
-    pub transitions: HashMap<Address, TransitionAccount>,
+    pub transitions: HashMap<Address, TransitionAccount<SV>>,
 }
 
-impl TransitionState {
+impl<SV: StorageValueTr> TransitionState<SV> {
     /// Create new transition state containing one [`TransitionAccount`].
-    pub fn single(address: Address, transition: TransitionAccount) -> Self {
+    pub fn single(address: Address, transition: TransitionAccount<SV>) -> Self {
         let mut transitions = HashMap::default();
         transitions.insert(address, transition);
         TransitionState { transitions }
@@ -20,7 +20,7 @@ impl TransitionState {
     /// empty one.
     ///
     /// See [core::mem::take].
-    pub fn take(&mut self) -> TransitionState {
+    pub fn take(&mut self) -> TransitionState<SV> {
         core::mem::take(self)
     }
 
@@ -28,7 +28,7 @@ impl TransitionState {
     ///
     /// This will insert new [`TransitionAccount`]s, or update existing ones via
     /// [`update`][TransitionAccount::update].
-    pub fn add_transitions(&mut self, transitions: Vec<(Address, TransitionAccount)>) {
+    pub fn add_transitions(&mut self, transitions: Vec<(Address, TransitionAccount<SV>)>) {
         for (address, account) in transitions {
             match self.transitions.entry(address) {
                 Entry::Occupied(entry) => {

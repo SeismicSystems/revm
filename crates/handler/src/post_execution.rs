@@ -87,14 +87,14 @@ pub fn reward_beneficiary<CTX: ContextTr>(
 ///
 /// TODO make Journal FinalOutput more generic.
 pub fn output<
-    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>,
+    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<CTX::Db as Database>::StorageValue>>>,
     HALTREASON: HaltReasonTr,
 >(
     context: &mut CTX,
     // TODO, make this more generic and nice.
     // FrameResult should be a generic that returns gas and interpreter result.
     result: FrameResult,
-) -> ResultAndState<HALTREASON> {
+) -> ResultAndState<HALTREASON, <CTX::Db as Database>::StorageValue> {
     // Used gas with refund calculated.
     let gas_refunded = result.gas().refunded() as u64;
     let final_gas_used = result.gas().spent() - gas_refunded;
