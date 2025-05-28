@@ -405,6 +405,10 @@ impl BundleRetention {
 /// And can be used to revert BundleState to the state before transition.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct BundleState<SV: StorageValueTr = StorageValue> {
     /// Account state
     pub state: HashMap<Address, BundleAccount<SV>>,

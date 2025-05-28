@@ -19,6 +19,10 @@ use primitives::{HashMap, StorageKey, StorageValue, StorageValueTr};
 /// Account type used inside Journal to track changed to state.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct Account<SV: StorageValueTr = StorageValue> {
     /// Balance, nonce, and code
     pub info: AccountInfo,
@@ -229,6 +233,10 @@ impl Default for AccountStatus {
 /// This type keeps track of the current value of a storage slot.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct EvmStorageSlot<SV: StorageValueTr = StorageValue> {
     /// Original value of the storage slot
     pub original_value: SV,

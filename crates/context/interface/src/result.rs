@@ -11,6 +11,12 @@ impl<T> HaltReasonTr for T where T: Clone + Debug + PartialEq + Eq + From<HaltRe
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize, \
+                 HaltReasonTy: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned, \
+                   HaltReasonTy: serde::de::DeserializeOwned"
+)))]
 pub struct ResultAndState<HaltReasonTy = HaltReason, SV: StorageValueTr = StorageValue> {
     /// Status of execution
     pub result: ExecutionResult<HaltReasonTy>,
@@ -34,6 +40,10 @@ impl<HaltReasonTy, SV: StorageValueTr> ResultAndState<HaltReasonTy, SV> {
 /// Result of a transaction execution
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "HaltReasonTy: serde::Serialize",
+    deserialize = "HaltReasonTy: serde::de::DeserializeOwned"
+)))]
 pub enum ExecutionResult<HaltReasonTy = HaltReason> {
     /// Returned successfully
     Success {

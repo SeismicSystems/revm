@@ -63,7 +63,6 @@ std = [
 ]
 serde = [
 	"dep:serde",
-	"primitives/serde",
 	"state/serde",
 	"context-interface/serde",
 	"alloy-eip7702/serde",

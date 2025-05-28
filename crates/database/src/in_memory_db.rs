@@ -16,6 +16,10 @@ pub type InMemoryDB = CacheDB<EmptyDB>;
 /// The [DbAccount] holds the code hash of the contract, which is used to look up the contract in the `contracts` map.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct Cache<SV: StorageValueTr = StorageValue> {
     /// Account info where None means it is not existing. Not existing state is needed for Pre TANGERINE forks.
     /// `code` is always `None`, and bytecode can be found in `contracts`.
@@ -359,6 +363,10 @@ impl<ExtDB: DatabaseRef> DatabaseRef for CacheDB<ExtDB> {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct DbAccount<SV: StorageValueTr = StorageValue> {
     pub info: AccountInfo,
     /// If account is selfdestructed or newly created, storage will be cleared.

@@ -17,6 +17,10 @@ use state::AccountInfo;
 /// On selfdestruct storage original value is ignored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct BundleAccount<SV: StorageValueTr = StorageValue> {
     pub info: Option<AccountInfo>,
     pub original_info: Option<AccountInfo>,

@@ -55,7 +55,6 @@ hashbrown = ["interpreter/hashbrown", "precompile/hashbrown"]
 serde = [
 	"interpreter/serde",
 	"database-interface/serde",
-	"primitives/serde",
 	"handler/serde",
 	"context-interface/serde",
 	"inspector/serde",

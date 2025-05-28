@@ -84,6 +84,10 @@ pub trait JournalEntryTr {
 /// Journal entries that are used to track changes to the state and are used to revert it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub enum JournalEntry<SV: StorageValueTr = StorageValue> {
     /// Used to mark account that is warm inside EVM in regard to EIP-2929 AccessList.
     /// Action: We will add Account to state.

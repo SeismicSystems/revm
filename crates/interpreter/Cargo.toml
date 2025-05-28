@@ -44,7 +44,6 @@ std = [
 hashbrown = ["primitives/hashbrown"]
 serde = [
 	"dep:serde",
-	"primitives/serde",
 	"bytecode/serde",
 	"context-interface/serde"
 ]

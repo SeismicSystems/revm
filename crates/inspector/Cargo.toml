@@ -61,7 +61,6 @@ serde = [
 	"database-interface/serde",
 	"handler/serde",
 	"interpreter/serde",
-	"primitives/serde",
 	"state/serde",
 ]
 serde-json = ["serde", "dep:serde_json"]

@@ -13,6 +13,10 @@ use std::vec::Vec;
 /// Contains reverts of multiple account in multiple transitions (Transitions as a block).
 #[derive(Clone, Debug, Default, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct Reverts<SV: StorageValueTr = StorageValue>(Vec<Vec<(Address, AccountRevert<SV>)>>);
 
 impl<SV: StorageValueTr> Deref for Reverts<SV> {
@@ -141,6 +145,10 @@ impl<SV: StorageValueTr> PartialEq for Reverts<SV> {
 /// And we need to be able to read it from database.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct AccountRevert<SV: StorageValueTr = StorageValue> {
     pub account: AccountInfoRevert,
     pub storage: HashMap<StorageKey, RevertToSlot<SV>>,
@@ -312,6 +320,10 @@ pub enum AccountInfoRevert {
 /// Because if it is destroyed, previous values can be found in database or it can be zero.
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub enum RevertToSlot<SV: StorageValueTr = StorageValue> {
     Some(SV),
     Destroyed,

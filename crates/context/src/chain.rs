@@ -21,9 +21,10 @@ impl<SV: StorageValueTr> ChainStorageConfigTr for EvmStorageConfig<SV> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use primitives::alloy_primitives::U256; 
+    use primitives::alloy_primitives::U256;
+    use serde::{Deserialize, Serialize}; 
 
-    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
     struct MyTestSV {
         value: U256,
         is_private_field: bool,
@@ -44,9 +45,7 @@ mod tests {
 
     #[test]
     fn default_evm_storage_config() {
-        let config = EvmStorageConfig::default();
-
-        let val: <EvmStorageConfig as ChainStorageConfigTr>::StorageVal = Default::default();
+        let val: <EvmStorageConfig as ChainStorageConfigTr>::StorageValue = Default::default();
         assert_eq!(val.to_u256(), U256::ZERO, "Default config should use U256 as StorageVal");
 
         let _val_is_storage_value_type: StorageValue = val;
@@ -54,15 +53,13 @@ mod tests {
 
     #[test]
     fn explicit_u256_evm_storage_config() {
-        let config = EvmStorageConfig::<StorageValue>::default();
-        let val: <EvmStorageConfig<StorageValue> as ChainStorageConfigTr>::StorageVal = Default::default();
+        let val: <EvmStorageConfig<StorageValue> as ChainStorageConfigTr>::StorageValue = Default::default();
         assert_eq!(val.to_u256(), U256::ZERO);
     }
 
     #[test]
     fn custom_sv_evm_storage_config() {
-        let config = EvmStorageConfig::<MyTestSV>::default();
-        let mut val: <EvmStorageConfig<MyTestSV> as ChainStorageConfigTr>::StorageVal = Default::default();
+        let mut val: <EvmStorageConfig<MyTestSV> as ChainStorageConfigTr>::StorageValue = Default::default();
 
         assert_eq!(val.to_u256(), U256::ZERO);
         assert_eq!(val.is_private(), false);
@@ -72,13 +69,12 @@ mod tests {
     }
 
     fn process_with_any_config<CSC: ChainStorageConfigTr>(_config: CSC) {
-        let storage_item: CSC::StorageVal = Default::default();
+        let storage_item: CSC::StorageValue = Default::default();
         assert!(storage_item.is_zero()); 
     }
 
     #[test]
     fn test_generic_processing() {
-        process_with_any_config(EvmStorageConfig::default()); 
         process_with_any_config(EvmStorageConfig::<MyTestSV>::default()); 
     }
 }

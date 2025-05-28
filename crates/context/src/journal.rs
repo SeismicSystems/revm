@@ -97,6 +97,10 @@ where
 /// Output of the journal after finalizing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct JournalOutput<SV: StorageValueTr = StorageValue> {
     /// Changes or touched accounts that loads, created or changed in the journal.
     pub state: EvmState<SV>,

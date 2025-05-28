@@ -35,4 +35,4 @@ std = [
 	"bitflags/std",
 	"bytecode/std"
 ]
-serde = ["dep:serde", "primitives/serde", "bitflags/serde", "bytecode/serde"]
+serde = ["dep:serde", "bitflags/serde", "bytecode/serde"]

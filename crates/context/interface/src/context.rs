@@ -75,6 +75,11 @@ impl<DbError> From<DbError> for ContextError<DbError> {
 /// Represents the result of an `sstore` operation.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
+
 pub struct SStoreResult<SV: StorageValueTr = StorageValue> {
     /// Value of the storage when it is first read
     pub original_value: SV,

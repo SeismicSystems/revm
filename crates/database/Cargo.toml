@@ -60,7 +60,6 @@ serde = [
 	"alloy-eips?/serde",
 	"bytecode/serde",
 	"database-interface/serde",
-	"primitives/serde",
 	"state/serde"
 ]
 alloydb = [

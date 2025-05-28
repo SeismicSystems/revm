@@ -12,7 +12,7 @@ pub use SpecId::*;
 /// Information was obtained from the [Ethereum Execution Specifications](https://github.com/ethereum/execution-specs).
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, TryFromPrimitive)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum SpecId {
     /// Frontier hard fork
     /// Activated at block 0

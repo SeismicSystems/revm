@@ -24,6 +24,10 @@ impl<SV: StorageValueTr> PlainAccount<SV> {
 /// This type keeps track of the current value of a storage slot.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(bound(
+    serialize = "SV: serde::Serialize",
+    deserialize = "SV: serde::de::DeserializeOwned" 
+)))]
 pub struct StorageSlot<SV: StorageValueTr = StorageValue> {
     /// The value of the storage slot before it was changed.
     ///

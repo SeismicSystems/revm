@@ -46,6 +46,8 @@ pub trait StorageValueTr:
     + Hash
     + Ord
     + From<U256> 
+    + serde::Serialize
+    + serde::de::DeserializeOwned
 {
     /// Converts the storage value to its U256 representation.
     fn to_u256(&self) -> U256;
