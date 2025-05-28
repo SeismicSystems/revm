@@ -3,12 +3,12 @@ use crate::{num_words, tri, SStoreResult, SelfDestructResult, StateLoad};
 use context_interface::{
     journaled_state::AccountLoad, transaction::AccessListItemTr as _, Transaction, TransactionType,
 };
-use primitives::{eip7702, hardfork::SpecId, U256};
+use primitives::{eip7702, hardfork::SpecId, StorageValueTr, U256};
 
 /// `SSTORE` opcode refund calculation.
 #[allow(clippy::collapsible_else_if)]
 #[inline]
-pub fn sstore_refund(spec_id: SpecId, vals: &SStoreResult) -> i64 {
+pub fn sstore_refund(spec_id: SpecId, vals: &SStoreResult<U256>) -> i64 {
     if spec_id.is_enabled_in(SpecId::ISTANBUL) {
         // EIP-3529: Reduction in refunds
         let sstore_clears_schedule = if spec_id.is_enabled_in(SpecId::LONDON) {
@@ -182,7 +182,7 @@ pub const fn sload_cost(spec_id: SpecId, is_cold: bool) -> u64 {
 
 /// `SSTORE` opcode cost calculation.
 #[inline]
-pub fn sstore_cost(spec_id: SpecId, vals: &SStoreResult, is_cold: bool) -> u64 {
+pub fn sstore_cost(spec_id: SpecId, vals: &SStoreResult<U256>, is_cold: bool) -> u64 {
     if spec_id.is_enabled_in(SpecId::BERLIN) {
         // Berlin specification logic
         let mut gas_cost = istanbul_sstore_cost::<WARM_STORAGE_READ_COST, WARM_SSTORE_RESET>(vals);

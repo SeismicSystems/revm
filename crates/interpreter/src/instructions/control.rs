@@ -278,7 +278,7 @@ mod test {
         eof::{CodeInfo, Eof},
         Bytecode,
     };
-    use primitives::bytes;
+    use primitives::{bytes, StorageValue};
     use std::sync::Arc;
 
     #[test]
@@ -288,7 +288,7 @@ mod test {
 
         interpreter.runtime_flag.is_eof = true;
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         interpreter.step(&table, &mut host);
         assert_eq!(interpreter.bytecode.pc(), 5)
@@ -303,7 +303,7 @@ mod test {
 
         interpreter.runtime_flag.is_eof = true;
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let _ = interpreter.stack.push(U256::from(1));
         let _ = interpreter.stack.push(U256::from(0));
@@ -337,7 +337,7 @@ mod test {
 
         interpreter.runtime_flag.is_eof = true;
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         // More then max_index
         let _ = interpreter.stack.push(U256::from(10));
@@ -410,7 +410,7 @@ mod test {
     #[test]
     fn callf_retf_stop() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let bytes1 = Bytes::from([CALLF, 0x00, 0x01, STOP]);
         let bytes2 = Bytes::from([RETF]);
@@ -448,7 +448,7 @@ mod test {
     #[test]
     fn callf_stop() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let bytes1 = Bytes::from([CALLF, 0x00, 0x01]);
         let bytes2 = Bytes::from([STOP]);
@@ -478,7 +478,7 @@ mod test {
     #[test]
     fn callf_stack_overflow() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let bytes1 = Bytes::from([CALLF, 0x00, 0x01]);
         let bytes2 = Bytes::from([STOP]);
@@ -504,7 +504,7 @@ mod test {
     #[test]
     fn jumpf_stop() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let bytes1 = Bytes::from([JUMPF, 0x00, 0x01]);
         let bytes2 = Bytes::from([STOP]);
@@ -532,7 +532,7 @@ mod test {
     #[test]
     fn jumpf_stack_overflow() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let bytes1 = Bytes::from([JUMPF, 0x00, 0x01, STOP]);
         let bytes2 = Bytes::from([STOP]);

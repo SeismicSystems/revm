@@ -2,7 +2,7 @@ use crate::{
     instructions::InstructionProvider, EthFrame, ExecuteCommitEvm, ExecuteEvm, Handler,
     MainnetHandler, PrecompileProvider,
 };
-use context::{ContextSetters, ContextTr, Evm, JournalOutput, JournalTr, TxEnv};
+use context::{ChainStorageConfigTr, ContextSetters, ContextTr, Database, Evm, JournalOutput, JournalTr, TxEnv};
 use database_interface::DatabaseCommit;
 use interpreter::{interpreter::EthInterpreter, InterpreterResult};
 use primitives::{address, Address, Bytes, TxKind};
@@ -61,8 +61,8 @@ pub trait SystemCallCommitEvm: SystemCallEvm + ExecuteCommitEvm {
 }
 
 impl<CTX, INSP, INST, PRECOMPILES> SystemCallEvm for Evm<CTX, INSP, INST, PRECOMPILES>
-where
-    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>, Tx: SystemCallTx>
+where 
+    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>, Tx: SystemCallTx>
         + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
@@ -83,8 +83,8 @@ where
 impl<CTX, INSP, INST, PRECOMPILES> SystemCallCommitEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
     CTX: ContextTr<
-            Journal: JournalTr<FinalOutput = JournalOutput>,
-            Db: DatabaseCommit,
+            Journal: JournalTr<FinalOutput = JournalOutput<<<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>,
+            Db: DatabaseCommit<StorageValue = <<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>,
             Tx: SystemCallTx,
         > + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,

@@ -182,11 +182,11 @@ mod tests {
         interpreter_types::LoopControl,
         Interpreter,
     };
-    use primitives::{uint, U256};
+    use primitives::{uint, StorageValue, U256};
 
     #[test]
     fn test_shift_left() {
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         let mut interpreter = Interpreter::default();
 
         struct TestCase {
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_logical_shift_right() {
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         let mut interpreter = Interpreter::default();
 
         struct TestCase {
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_arithmetic_shift_right() {
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         let mut interpreter = Interpreter::default();
 
         struct TestCase {
@@ -457,7 +457,7 @@ mod tests {
             expected: U256,
         }
 
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         let mut interpreter = Interpreter::default();
 
         let input_value = U256::from(0x1234567890abcdef1234567890abcdef_u128);

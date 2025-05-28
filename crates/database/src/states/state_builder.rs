@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 /// Allows building of State and initializing it with different options.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StateBuilder<DB> {
+pub struct StateBuilder<DB: Database> {
     /// Database that we use to fetch data from
     database: DB,
     /// Enabled state clear flag that is introduced in Spurious Dragon hardfork
@@ -14,9 +14,9 @@ pub struct StateBuilder<DB> {
     with_state_clear: bool,
     /// If there is prestate that we want to use,
     /// this would mean that we have additional state layer between evm and disk/database.
-    with_bundle_prestate: Option<BundleState>,
+    with_bundle_prestate: Option<BundleState<DB::StorageValue>>,
     /// This will initialize cache to this state.
-    with_cache_prestate: Option<CacheState>,
+    with_cache_prestate: Option<CacheState<DB::StorageValue>>,
     /// Do we want to create reverts and update bundle state?
     ///
     /// Default is false.
@@ -47,6 +47,15 @@ impl<DB: Database + Default> Default for StateBuilder<DB> {
     }
 }
 
+impl<DB: Database<StorageValue = primitives::StorageValue>> StateBuilder<DB> {
+    pub fn with_database_boxed<E: DBErrorMarker + core::error::Error>(
+        self,
+        database: DBBox<'_, E>, 
+    ) -> StateBuilder<DBBox<'_, E>> { 
+        self.with_database(database)
+    }
+}
+
 impl<DB: Database> StateBuilder<DB> {
     /// Create a new builder with the given database.
     pub fn new_with_database(database: DB) -> Self {
@@ -62,7 +71,7 @@ impl<DB: Database> StateBuilder<DB> {
     }
 
     /// Set the database.
-    pub fn with_database<ODB: Database>(self, database: ODB) -> StateBuilder<ODB> {
+    pub fn with_database<ODB: Database<StorageValue = DB::StorageValue>>(self, database: ODB) -> StateBuilder<ODB> {
         // Cast to the different database.
         // Note that we return different type depending on the database NewDBError.
         StateBuilder {
@@ -77,19 +86,11 @@ impl<DB: Database> StateBuilder<DB> {
     }
 
     /// Takes [DatabaseRef] and wraps it with [WrapDatabaseRef].
-    pub fn with_database_ref<ODB: DatabaseRef>(
+    pub fn with_database_ref<ODB: DatabaseRef<StorageValue = DB::StorageValue>>(
         self,
         database: ODB,
     ) -> StateBuilder<WrapDatabaseRef<ODB>> {
         self.with_database(WrapDatabaseRef(database))
-    }
-
-    /// With boxed version of database.
-    pub fn with_database_boxed<Error: DBErrorMarker + core::error::Error>(
-        self,
-        database: DBBox<'_, Error>,
-    ) -> StateBuilder<DBBox<'_, Error>> {
-        self.with_database(database)
     }
 
     /// By default state clear flag is enabled but for initial sync on mainnet
@@ -109,7 +110,7 @@ impl<DB: Database> StateBuilder<DB> {
     /// And State after not finding data inside StateCache will try to find it inside BundleState.
     ///
     /// On update Bundle state will be changed and updated.
-    pub fn with_bundle_prestate(self, bundle: BundleState) -> Self {
+    pub fn with_bundle_prestate(self, bundle: BundleState<DB::StorageValue>) -> Self {
         Self {
             with_bundle_prestate: Some(bundle),
             ..self
@@ -134,7 +135,7 @@ impl<DB: Database> StateBuilder<DB> {
     /// And will ignore `without_state_clear` flag as cache contains its own state_clear flag.
     ///
     /// This is useful for testing.
-    pub fn with_cached_prestate(self, cache: CacheState) -> Self {
+    pub fn with_cached_prestate(self, cache: CacheState<DB::StorageValue>) -> Self {
         Self {
             with_cache_prestate: Some(cache),
             ..self
@@ -167,10 +168,10 @@ impl<DB: Database> StateBuilder<DB> {
         State {
             cache: self
                 .with_cache_prestate
-                .unwrap_or_else(|| CacheState::new(self.with_state_clear)),
+                .unwrap_or_else(|| CacheState::<DB::StorageValue>::new(self.with_state_clear)),
             database: self.database,
-            transition_state: self.with_bundle_update.then(TransitionState::default),
-            bundle_state: self.with_bundle_prestate.unwrap_or_default(),
+            transition_state: self.with_bundle_update.then(TransitionState::<DB::StorageValue>::default),
+            bundle_state: self.with_bundle_prestate.unwrap_or_else(BundleState::<DB::StorageValue>::default),
             use_preloaded_bundle,
             block_hashes: self.with_block_hashes,
         }

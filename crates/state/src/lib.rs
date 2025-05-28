@@ -14,21 +14,21 @@ pub use types::{EvmState, EvmStorage, TransientStorage};
 use bitflags::bitflags;
 use core::hash::Hash;
 use primitives::hardfork::SpecId;
-use primitives::{HashMap, StorageKey, StorageValue};
+use primitives::{HashMap, StorageKey, StorageValue, StorageValueTr};
 
 /// Account type used inside Journal to track changed to state.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Account {
+pub struct Account<SV: StorageValueTr = StorageValue> {
     /// Balance, nonce, and code
     pub info: AccountInfo,
     /// Storage cache
-    pub storage: EvmStorage,
+    pub storage: EvmStorage<SV>,
     /// Account status flags
     pub status: AccountStatus,
 }
 
-impl Account {
+impl<SV: StorageValueTr> Account<SV> {
     /// Creates new account and mark it as non existing.
     pub fn new_not_existing() -> Self {
         Self {
@@ -126,8 +126,8 @@ impl Account {
     /// Returns an iterator over the storage slots that have been changed.
     ///
     /// See also [EvmStorageSlot::is_changed].
-    pub fn changed_storage_slots(&self) -> impl Iterator<Item = (&StorageKey, &EvmStorageSlot)> {
-        self.storage.iter().filter(|(_, slot)| slot.is_changed())
+    pub fn changed_storage_slots(&self) -> impl Iterator<Item = (&StorageKey, &EvmStorageSlot<SV>)> {
+        self.storage.iter().filter(|(_k, slot): &(&StorageKey, &EvmStorageSlot<SV>)| slot.is_changed())
     }
 
     /// Sets account info and returns self for method chaining.
@@ -139,7 +139,7 @@ impl Account {
     /// Populates storage from an iterator of storage slots and returns self for method chaining.
     pub fn with_storage<I>(mut self, storage_iter: I) -> Self
     where
-        I: Iterator<Item = (StorageKey, EvmStorageSlot)>,
+       I: Iterator<Item = (StorageKey, EvmStorageSlot<SV>)> 
     {
         for (key, slot) in storage_iter {
             self.storage.insert(key, slot);
@@ -185,11 +185,11 @@ impl Account {
     }
 }
 
-impl From<AccountInfo> for Account {
+impl<SV: StorageValueTr> From<AccountInfo> for Account<SV> {
     fn from(info: AccountInfo) -> Self {
-        Self {
+        Account::<SV> { 
             info,
-            storage: HashMap::default(),
+            storage: EvmStorage::<SV>::default(), 
             status: AccountStatus::Loaded,
         }
     }
@@ -229,18 +229,18 @@ impl Default for AccountStatus {
 /// This type keeps track of the current value of a storage slot.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct EvmStorageSlot {
+pub struct EvmStorageSlot<SV: StorageValueTr = StorageValue> {
     /// Original value of the storage slot
-    pub original_value: StorageValue,
+    pub original_value: SV,
     /// Present value of the storage slot
-    pub present_value: StorageValue,
+    pub present_value: SV,
     /// Represents if the storage slot is cold
     pub is_cold: bool,
 }
 
-impl EvmStorageSlot {
+impl <SV: StorageValueTr> EvmStorageSlot<SV> {
     /// Creates a new _unchanged_ `EvmStorageSlot` for the given value.
-    pub fn new(original: StorageValue) -> Self {
+    pub fn new(original: SV) -> Self {
         Self {
             original_value: original,
             present_value: original,
@@ -249,7 +249,7 @@ impl EvmStorageSlot {
     }
 
     /// Creates a new _changed_ `EvmStorageSlot`.
-    pub fn new_changed(original_value: StorageValue, present_value: StorageValue) -> Self {
+    pub fn new_changed(original_value: SV, present_value: SV) -> Self {
         Self {
             original_value,
             present_value,
@@ -262,12 +262,12 @@ impl EvmStorageSlot {
     }
 
     /// Returns the original value of the storage slot.
-    pub fn original_value(&self) -> StorageValue {
+    pub fn original_value(&self) -> SV {
         self.original_value
     }
 
     /// Returns the current value of the storage slot.
-    pub fn present_value(&self) -> StorageValue {
+    pub fn present_value(&self) -> SV {
         self.present_value
     }
 
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn account_is_empty_balance() {
-        let mut account = Account::default();
+        let mut account: Account<StorageValue> = Account::default();
         assert!(account.is_empty());
 
         account.info.balance = U256::from(1);
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn account_is_empty_nonce() {
-        let mut account = Account::default();
+        let mut account: Account<StorageValue> = Account::default();
         assert!(account.is_empty());
 
         account.info.nonce = 1;
@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn account_is_empty_code_hash() {
-        let mut account = Account::default();
+        let mut account: Account<StorageValue> = Account::default();
         assert!(account.is_empty());
 
         account.info.code_hash = [1; 32].into();
@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn account_state() {
-        let mut account = Account::default();
+        let mut account: Account<StorageValue> = Account::default();
 
         assert!(!account.is_touched());
         assert!(!account.is_selfdestructed());
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn account_is_cold() {
-        let mut account = Account::default();
+        let mut account: Account<StorageValue> = Account::default();
 
         // Account is not cold by default
         assert!(!account.status.contains(crate::AccountStatus::Cold));
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn test_account_with_info() {
         let info = AccountInfo::default();
-        let account = Account::default().with_info(info.clone());
+        let account: Account<StorageValue> = Account::default().with_info(info.clone());
 
         assert_eq!(account.info, info);
         assert_eq!(account.storage, HashMap::default());
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_account_with_selfdestruct_mark() {
-        let account = Account::default().with_selfdestruct_mark();
+        let account: Account<StorageValue> = Account::default().with_selfdestruct_mark();
 
         assert!(account.is_selfdestructed());
         assert!(!account.is_touched());
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_account_with_touched_mark() {
-        let account = Account::default().with_touched_mark();
+        let account: Account<StorageValue> = Account::default().with_touched_mark();
 
         assert!(!account.is_selfdestructed());
         assert!(account.is_touched());
@@ -415,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_account_with_created_mark() {
-        let account = Account::default().with_created_mark();
+        let account: Account<StorageValue> = Account::default().with_created_mark();
 
         assert!(!account.is_selfdestructed());
         assert!(!account.is_touched());
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_account_with_cold_mark() {
-        let account = Account::default().with_cold_mark();
+        let account: Account<StorageValue> = Account::default().with_cold_mark();
 
         assert!(account.status.contains(AccountStatus::Cold));
     }
@@ -432,7 +432,7 @@ mod tests {
     #[test]
     fn test_account_with_warm_mark() {
         // Start with a cold account
-        let cold_account = Account::default().with_cold_mark();
+        let cold_account: Account<StorageValue> = Account::default().with_cold_mark();
         assert!(cold_account.status.contains(AccountStatus::Cold));
 
         // Use with_warm_mark to warm it
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn test_account_with_warm() {
         // Start with a cold account
-        let cold_account = Account::default().with_cold_mark();
+        let cold_account: Account<StorageValue> = Account::default().with_cold_mark();
         assert!(cold_account.status.contains(AccountStatus::Cold));
 
         // Use with_warm to warm it

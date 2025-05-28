@@ -85,7 +85,7 @@ pub fn data_copy<WIRE: InterpreterTypes, H: Host + ?Sized>(
 #[cfg(test)]
 mod test {
     use bytecode::{Bytecode, Eof};
-    use primitives::{b256, bytes, Bytes};
+    use primitives::{b256, bytes, Bytes, StorageValue};
     use std::sync::Arc;
 
     use super::*;
@@ -109,7 +109,7 @@ mod test {
     #[test]
     fn dataload_dataloadn() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
 
         let eof = dummy_eof(Bytes::from([
             DATALOAD, DATALOADN, 0x00, 0x00, DATALOAD, DATALOADN, 0x00, 35, DATALOAD, DATALOADN,
@@ -167,7 +167,7 @@ mod test {
     #[test]
     fn data_copy() {
         let table = instruction_table();
-        let mut host = DummyHost;
+        let mut host: DummyHost<StorageValue> = DummyHost::default();
         let eof = dummy_eof(Bytes::from([DATACOPY, DATACOPY, DATACOPY, DATACOPY]));
 
         let mut interpreter = Interpreter::default().with_bytecode(eof);

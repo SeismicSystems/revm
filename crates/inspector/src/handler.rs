@@ -1,6 +1,6 @@
 use crate::{Inspector, InspectorEvmTr, InspectorFrame, JournalExt};
 use context::{result::ResultAndState, ContextTr, JournalEntry, Transaction};
-use handler::{EvmTr, Frame, FrameInitOrResult, FrameOrResult, FrameResult, Handler, ItemOrResult};
+use handler::{handler::HandlerStorageValue, EvmTr, Frame, FrameInitOrResult, FrameOrResult, FrameResult, Handler, ItemOrResult};
 use interpreter::{
     instructions::InstructionTable,
     interpreter_types::{Jumps, LoopControl},
@@ -40,7 +40,7 @@ where
     fn inspect_run(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         match self.inspect_run_without_catch_error(evm) {
             Ok(output) => Ok(output),
             Err(e) => self.catch_error(evm, e),
@@ -53,7 +53,7 @@ where
     fn inspect_run_without_catch_error(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         let init_and_floor_gas = self.validate(evm)?;
         let eip7702_refund = self.pre_execution(evm)? as i64;
         let exec_result = self.inspect_execution(evm, &init_and_floor_gas);

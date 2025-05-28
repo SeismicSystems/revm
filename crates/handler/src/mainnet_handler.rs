@@ -1,6 +1,6 @@
 use super::{EvmTrError, Handler};
 use crate::{EvmTr, Frame, FrameResult};
-use context::JournalOutput;
+use context::{Database, JournalOutput};
 use context_interface::{result::HaltReason, ContextTr, JournalTr};
 use interpreter::FrameInput;
 
@@ -10,7 +10,7 @@ pub struct MainnetHandler<CTX, ERROR, FRAME> {
 
 impl<EVM, ERROR, FRAME> Handler for MainnetHandler<EVM, ERROR, FRAME>
 where
-    EVM: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>>,
+    EVM: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<<<EVM as EvmTr>::Context as ContextTr>::Db as Database>::StorageValue>>>>,
     ERROR: EvmTrError<EVM>,
     // TODO `FrameResult` should be a generic trait.
     // TODO `FrameInit` should be a generic.

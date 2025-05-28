@@ -2,8 +2,7 @@ use crate::{
     instructions::InstructionProvider, EthFrame, Handler, MainnetHandler, PrecompileProvider,
 };
 use context::{
-    result::{EVMError, ExecutionResult, HaltReason, InvalidTransaction, ResultAndState},
-    Block, ContextSetters, ContextTr, Database, Evm, JournalOutput, JournalTr, Transaction,
+    result::{EVMError, ExecutionResult, HaltReason, InvalidTransaction, ResultAndState}, Block, ChainStorageConfigTr, ContextSetters, ContextTr, Database, Evm, JournalOutput, JournalTr, Transaction
 };
 use database_interface::DatabaseCommit;
 use interpreter::{interpreter::EthInterpreter, InterpreterResult};
@@ -52,12 +51,14 @@ pub trait ExecuteCommitEvm: ExecuteEvm {
 
 impl<CTX, INSP, INST, PRECOMPILES> ExecuteEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
-    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>> + ContextSetters,
+    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>> + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,
 {
     type Output = Result<
-        ResultAndState<HaltReason>,
+        ResultAndState<
+            HaltReason,
+            <<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>,
         EVMError<<CTX::Db as Database>::Error, InvalidTransaction>,
     >;
 
@@ -81,7 +82,8 @@ where
 
 impl<CTX, INSP, INST, PRECOMPILES> ExecuteCommitEvm for Evm<CTX, INSP, INST, PRECOMPILES>
 where
-    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>, Db: DatabaseCommit>
+    CTX: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>, 
+    Db: DatabaseCommit<StorageValue = <<CTX as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>
         + ContextSetters,
     INST: InstructionProvider<Context = CTX, InterpreterTypes = EthInterpreter>,
     PRECOMPILES: PrecompileProvider<CTX, Output = InterpreterResult>,

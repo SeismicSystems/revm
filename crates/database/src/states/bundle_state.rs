@@ -7,7 +7,7 @@ use super::{
 use bytecode::Bytecode;
 use core::{mem, ops::RangeInclusive};
 use primitives::{
-    hash_map::Entry, Address, HashMap, HashSet, StorageKey, StorageValue, B256, KECCAK_EMPTY,
+    hash_map::Entry, Address, HashMap, HashSet, StorageKey, StorageValue, StorageValueTr, B256, KECCAK_EMPTY
 };
 use state::AccountInfo;
 use std::{
@@ -17,16 +17,16 @@ use std::{
 
 /// This builder is used to help to facilitate the initialization of `BundleState` struct
 #[derive(Debug)]
-pub struct BundleBuilder {
+pub struct BundleBuilder<SV: StorageValueTr = StorageValue> {
     states: HashSet<Address>,
     state_original: HashMap<Address, AccountInfo>,
     state_present: HashMap<Address, AccountInfo>,
-    state_storage: HashMap<Address, HashMap<StorageKey, (StorageValue, StorageValue)>>,
+    state_storage: HashMap<Address, HashMap<StorageKey, (SV, SV)>>,
 
     reverts: BTreeSet<(u64, Address)>,
     revert_range: RangeInclusive<u64>,
     revert_account: HashMap<(u64, Address), Option<Option<AccountInfo>>>,
-    revert_storage: HashMap<(u64, Address), Vec<(StorageKey, StorageValue)>>,
+    revert_storage: HashMap<(u64, Address), Vec<(StorageKey, SV)>>,
 
     contracts: HashMap<B256, Bytecode>,
 }
@@ -53,7 +53,7 @@ impl OriginalValuesKnown {
     }
 }
 
-impl Default for BundleBuilder {
+impl<SV: StorageValueTr> Default for BundleBuilder<SV> {
     fn default() -> Self {
         BundleBuilder {
             states: HashSet::default(),
@@ -69,7 +69,7 @@ impl Default for BundleBuilder {
     }
 }
 
-impl BundleBuilder {
+impl<SV: StorageValueTr> BundleBuilder<SV> {
     /// Creates builder instance.
     ///
     /// `revert_range` indicates the size of BundleState `reverts` field.
@@ -119,7 +119,7 @@ impl BundleBuilder {
     pub fn state_storage(
         mut self,
         address: Address,
-        storage: HashMap<StorageKey, (StorageValue, StorageValue)>,
+        storage: HashMap<StorageKey, (SV, SV)>,
     ) -> Self {
         self.set_state_storage(address, storage);
         self
@@ -156,7 +156,7 @@ impl BundleBuilder {
         mut self,
         block_number: u64,
         address: Address,
-        storage: Vec<(StorageKey, StorageValue)>,
+        storage: Vec<(StorageKey, SV)>,
     ) -> Self {
         self.set_revert_storage(block_number, address, storage);
         self
@@ -200,7 +200,7 @@ impl BundleBuilder {
     pub fn set_state_storage(
         &mut self,
         address: Address,
-        storage: HashMap<StorageKey, (StorageValue, StorageValue)>,
+        storage: HashMap<StorageKey, (SV, SV)>,
     ) -> &mut Self {
         self.states.insert(address);
         self.state_storage.insert(address, storage);
@@ -230,7 +230,7 @@ impl BundleBuilder {
         &mut self,
         block_number: u64,
         address: Address,
-        storage: Vec<(StorageKey, StorageValue)>,
+        storage: Vec<(StorageKey, SV)>,
     ) -> &mut Self {
         self.reverts.insert((block_number, address));
         self.revert_storage.insert((block_number, address), storage);
@@ -244,7 +244,7 @@ impl BundleBuilder {
     }
 
     /// Creates `BundleState` instance based on collected information.
-    pub fn build(mut self) -> BundleState {
+    pub fn build(mut self) -> BundleState<SV> {
         let mut state_size = 0;
         let state = self
             .states
@@ -255,11 +255,11 @@ impl BundleBuilder {
                     .remove(&address)
                     .map(|s| {
                         s.into_iter()
-                            .map(|(k, (o_val, p_val))| (k, StorageSlot::new_changed(o_val, p_val)))
+                            .map(|(k, (o_val, p_val))| (k, StorageSlot::<SV>::new_changed(o_val, p_val)))
                             .collect()
                     })
                     .unwrap_or_default();
-                let bundle_account = BundleAccount::new(
+                let bundle_account = BundleAccount::<SV>::new(
                     self.state_original.remove(&address),
                     self.state_present.remove(&address),
                     storage,
@@ -292,11 +292,11 @@ impl BundleBuilder {
                     .remove(&(block_number, address))
                     .map(|s| {
                         s.into_iter()
-                            .map(|(k, v)| (k, RevertToSlot::Some(v)))
+                            .map(|(k, v)| (k, RevertToSlot::<SV>::Some(v)))
                             .collect()
                     })
                     .unwrap_or_default();
-                let account_revert = AccountRevert {
+                let account_revert = AccountRevert::<SV> {
                     account,
                     storage,
                     previous_status: AccountStatus::Changed,
@@ -315,7 +315,7 @@ impl BundleBuilder {
         BundleState {
             state,
             contracts: self.contracts,
-            reverts: Reverts::new(reverts_map.into_values().collect()),
+            reverts: Reverts::<SV>::new(reverts_map.into_values().collect()),
             state_size,
             reverts_size,
         }
@@ -344,7 +344,7 @@ impl BundleBuilder {
     /// Mutable getter for `state_storage` field
     pub fn get_state_storage_mut(
         &mut self,
-    ) -> &mut HashMap<Address, HashMap<StorageKey, (StorageValue, StorageValue)>> {
+    ) -> &mut HashMap<Address, HashMap<StorageKey, (SV, SV)>> {
         &mut self.state_storage
     }
 
@@ -368,7 +368,7 @@ impl BundleBuilder {
     /// Mutable getter for `revert_storage` field
     pub fn get_revert_storage_mut(
         &mut self,
-    ) -> &mut HashMap<(u64, Address), Vec<(StorageKey, StorageValue)>> {
+    ) -> &mut HashMap<(u64, Address), Vec<(StorageKey, SV)>> {
         &mut self.revert_storage
     }
 
@@ -405,9 +405,9 @@ impl BundleRetention {
 /// And can be used to revert BundleState to the state before transition.
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BundleState {
+pub struct BundleState<SV: StorageValueTr = StorageValue> {
     /// Account state
-    pub state: HashMap<Address, BundleAccount>,
+    pub state: HashMap<Address, BundleAccount<SV>>,
     /// All created contracts in this block.
     pub contracts: HashMap<B256, Bytecode>,
     /// Changes to revert
@@ -415,17 +415,17 @@ pub struct BundleState {
     /// **Note**: Inside vector is *not* sorted by address.
     ///
     /// But it is unique by address.
-    pub reverts: Reverts,
+    pub reverts: Reverts<SV>,
     /// The size of the plain state in the bundle state
     pub state_size: usize,
     /// The size of reverts in the bundle state
     pub reverts_size: usize,
 }
 
-impl BundleState {
+impl<SV: StorageValueTr> BundleState<SV> {
     /// Returns builder instance for further manipulation.
-    pub fn builder(revert_range: RangeInclusive<u64>) -> BundleBuilder {
-        BundleBuilder::new(revert_range)
+    pub fn builder(revert_range: RangeInclusive<u64>) -> BundleBuilder<SV> {
+        BundleBuilder::<SV>::new(revert_range)
     }
 
     /// Creates it with new and old values of both Storage and AccountInfo.
@@ -435,7 +435,7 @@ impl BundleState {
                 Address,
                 Option<AccountInfo>,
                 Option<AccountInfo>,
-                HashMap<StorageKey, (StorageValue, StorageValue)>,
+                HashMap<StorageKey, (SV, SV)>,
             ),
         >,
         reverts: impl IntoIterator<
@@ -443,7 +443,7 @@ impl BundleState {
                 Item = (
                     Address,
                     Option<Option<AccountInfo>>,
-                    impl IntoIterator<Item = (StorageKey, StorageValue)>,
+                    impl IntoIterator<Item = (StorageKey, SV)>,
                 ),
             >,
         >,
@@ -454,12 +454,12 @@ impl BundleState {
         let state = state
             .into_iter()
             .map(|(address, original, present, storage)| {
-                let account = BundleAccount::new(
+                let account = BundleAccount::<SV>::new(
                     original,
                     present,
                     storage
                         .into_iter()
-                        .map(|(k, (o_val, p_val))| (k, StorageSlot::new_changed(o_val, p_val)))
+                        .map(|(k, (o_val, p_val))| (k, StorageSlot::<SV>::new_changed(o_val, p_val)))
                         .collect(),
                     AccountStatus::Changed,
                 );
@@ -481,11 +481,11 @@ impl BundleState {
                             Some(None) => AccountInfoRevert::DeleteIt,
                             None => AccountInfoRevert::DoNothing,
                         };
-                        let revert = AccountRevert {
+                        let revert = AccountRevert::<SV> {
                             account,
                             storage: storage
                                 .into_iter()
-                                .map(|(k, v)| (k, RevertToSlot::Some(v)))
+                                .map(|(k, v)| (k, RevertToSlot::<SV>::Some(v)))
                                 .collect(),
                             previous_status: AccountStatus::Changed,
                             wipe_storage: false,
@@ -500,7 +500,7 @@ impl BundleState {
         Self {
             state,
             contracts: contracts.into_iter().collect(),
-            reverts: Reverts::new(reverts),
+            reverts: Reverts::<SV>::new(reverts),
             state_size,
             reverts_size,
         }
@@ -515,7 +515,7 @@ impl BundleState {
     }
 
     /// Returns reference to the state.
-    pub fn state(&self) -> &HashMap<Address, BundleAccount> {
+    pub fn state(&self) -> &HashMap<Address, BundleAccount<SV>> {
         &self.state
     }
 
@@ -530,7 +530,7 @@ impl BundleState {
     }
 
     /// Gets account from state.
-    pub fn account(&self, address: &Address) -> Option<&BundleAccount> {
+    pub fn account(&self, address: &Address) -> Option<&BundleAccount<SV>> {
         self.state.get(address)
     }
 
@@ -546,7 +546,7 @@ impl BundleState {
     /// be retained.
     pub fn apply_transitions_and_create_reverts(
         &mut self,
-        transitions: TransitionState,
+        transitions: TransitionState<SV>,
         retention: BundleRetention,
     ) {
         let include_reverts = retention.includes_reverts();
@@ -598,7 +598,7 @@ impl BundleState {
 
     /// Generate a [`StateChangeset`] from the bundle state without consuming
     /// it.
-    pub fn to_plain_state(&self, is_value_known: OriginalValuesKnown) -> StateChangeset {
+    pub fn to_plain_state(&self, is_value_known: OriginalValuesKnown) -> StateChangeset<SV> {
         // Pessimistically pre-allocate assuming _all_ accounts changed.
         let state_len = self.state.len();
         let mut accounts = Vec::with_capacity(state_len);
@@ -637,7 +637,7 @@ impl BundleState {
 
             if !account_storage_changed.is_empty() || was_destroyed {
                 // Append storage changes to account.
-                storage.push(PlainStorageChangeset {
+                storage.push(PlainStorageChangeset::<SV> {
                     address: *address,
                     wipe_storage: was_destroyed,
                     storage: account_storage_changed,
@@ -652,7 +652,7 @@ impl BundleState {
             .filter(|(b, _)| **b != KECCAK_EMPTY)
             .map(|(b, code)| (*b, code.clone()))
             .collect::<Vec<_>>();
-        StateChangeset {
+        StateChangeset::<SV> {
             accounts,
             storage,
             contracts,
@@ -661,7 +661,7 @@ impl BundleState {
 
     /// Converts the bundle state into a [`StateChangeset`].
     #[deprecated = "Use `to_plain_state` instead"]
-    pub fn into_plain_state(self, is_value_known: OriginalValuesKnown) -> StateChangeset {
+    pub fn into_plain_state(self, is_value_known: OriginalValuesKnown) -> StateChangeset<SV> {
         self.to_plain_state(is_value_known)
     }
 
@@ -670,7 +670,7 @@ impl BundleState {
     pub fn to_plain_state_and_reverts(
         &self,
         is_value_known: OriginalValuesKnown,
-    ) -> (StateChangeset, PlainStateReverts) {
+    ) -> (StateChangeset<SV>, PlainStateReverts<SV>) {
         (
             self.to_plain_state(is_value_known),
             self.reverts.to_plain_state_reverts(),
@@ -683,14 +683,14 @@ impl BundleState {
     pub fn into_plain_state_and_reverts(
         self,
         is_value_known: OriginalValuesKnown,
-    ) -> (StateChangeset, PlainStateReverts) {
+    ) -> (StateChangeset<SV>, PlainStateReverts<SV>) {
         self.to_plain_state_and_reverts(is_value_known)
     }
 
     /// Extends the bundle with other state.
     ///
     /// Updates the `other` state only if `other` is not flagged as destroyed.
-    pub fn extend_state(&mut self, other_state: HashMap<Address, BundleAccount>) {
+    pub fn extend_state(&mut self, other_state: HashMap<Address, BundleAccount<SV>>) {
         for (address, other_account) in other_state {
             match self.state.entry(address) {
                 Entry::Occupied(mut entry) => {
@@ -749,7 +749,7 @@ impl BundleState {
                         revert
                             .storage
                             .entry(key)
-                            .or_insert(RevertToSlot::Some(value.present_value));
+                            .or_insert(RevertToSlot::<SV>::Some(value.present_value));
                     }
 
                     // Nullify `other` wipe as primary database wipe is done in `this`.
@@ -771,7 +771,7 @@ impl BundleState {
     }
 
     /// Takes first N raw reverts from the [BundleState].
-    pub fn take_n_reverts(&mut self, reverts_to_take: usize) -> Reverts {
+    pub fn take_n_reverts(&mut self, reverts_to_take: usize) -> Reverts<SV> {
         // Split is done as [0, num) and [num, len].
         if reverts_to_take > self.reverts.len() {
             return self.take_all_reverts();
@@ -787,7 +787,7 @@ impl BundleState {
     }
 
     /// Returns and clears all reverts from [BundleState].
-    pub fn take_all_reverts(&mut self) -> Reverts {
+    pub fn take_all_reverts(&mut self) -> Reverts<SV> {
         self.reverts_size = 0;
         mem::take(&mut self.reverts)
     }
@@ -856,7 +856,7 @@ impl BundleState {
     /// It adds changes from the given state but does not override any existing changes.
     ///
     /// Reverts are not updated.
-    pub fn prepend_state(&mut self, mut other: BundleState) {
+    pub fn prepend_state(&mut self, mut other: BundleState<SV>) {
         // Take this bundle
         let this_bundle = mem::take(self);
         // Extend other bundle state with this
@@ -885,7 +885,7 @@ mod tests {
             code: None,
         };
 
-        let mut bundle_state = BundleState::default();
+        let mut bundle_state: BundleState<StorageValue> = BundleState::default();
 
         // Have transition from loaded to all other states
 
@@ -1156,7 +1156,7 @@ mod tests {
 
     #[test]
     fn test_multi_reverts_with_delete() {
-        let mut state = BundleBuilder::new(0..=3)
+        let mut state = BundleBuilder::<StorageValue>::new(0..=3)
             .revert_address(0, account1())
             .revert_account_info(2, account1(), Some(Some(AccountInfo::default())))
             .revert_account_info(3, account1(), Some(None))
@@ -1255,7 +1255,7 @@ mod tests {
             ..Default::default()
         };
 
-        let present_state = BundleState::builder(2..=2)
+        let present_state = BundleState::<StorageValue>::builder(2..=2)
             .state_present_account_info(address1, account1_changed.clone())
             .build();
         assert_eq!(present_state.reverts.len(), 1);

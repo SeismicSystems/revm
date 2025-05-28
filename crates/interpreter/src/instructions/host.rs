@@ -6,7 +6,7 @@ use crate::{
     Host, InstructionResult,
 };
 use core::cmp::min;
-use primitives::{hardfork::SpecId::*, Bytes, Log, LogData, B256, BLOCK_HASH_HISTORY, U256};
+use primitives::{hardfork::SpecId::*, Bytes, Log, LogData, StorageValue, StorageValueTr, B256, BLOCK_HASH_HISTORY, U256};
 
 pub fn balance<WIRE: InterpreterTypes, H: Host + ?Sized>(
     interpreter: &mut Interpreter<WIRE>,
@@ -186,7 +186,7 @@ pub fn sload<WIRE: InterpreterTypes, H: Host + ?Sized>(
         interpreter,
         gas::sload_cost(interpreter.runtime_flag.spec_id(), value.is_cold)
     );
-    *index = value.data;
+    *index = value.data.to_u256();
 }
 
 pub fn sstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
@@ -197,7 +197,7 @@ pub fn sstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
 
     popn!([index, value], interpreter);
 
-    let Some(state_load) = host.sstore(interpreter.input.target_address(), index, value) else {
+    let Some(state_load) = host.sstore(interpreter.input.target_address(), index, H::StorageValue::from(value)) else {
         interpreter
             .control
             .set_instruction_result(InstructionResult::FatalExternalError);
@@ -217,7 +217,7 @@ pub fn sstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
         interpreter,
         gas::sstore_cost(
             interpreter.runtime_flag.spec_id(),
-            &state_load.data,
+            &state_load.data.to_u256_result(),
             state_load.is_cold
         )
     );
@@ -227,7 +227,7 @@ pub fn sstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
         .gas_mut()
         .record_refund(gas::sstore_refund(
             interpreter.runtime_flag.spec_id(),
-            &state_load.data,
+            &state_load.data.to_u256_result(),
         ));
 }
 
@@ -243,7 +243,7 @@ pub fn tstore<WIRE: InterpreterTypes, H: Host + ?Sized>(
 
     popn!([index, value], interpreter);
 
-    host.tstore(interpreter.input.target_address(), index, value);
+    host.tstore(interpreter.input.target_address(), index, H::StorageValue::from(value));
 }
 
 /// EIP-1153: Transient storage opcodes
@@ -257,7 +257,7 @@ pub fn tload<WIRE: InterpreterTypes, H: Host + ?Sized>(
 
     popn_top!([], index, interpreter);
 
-    *index = host.tload(interpreter.input.target_address(), *index);
+    *index = host.tload(interpreter.input.target_address(), *index).to_u256();
 }
 
 pub fn log<const N: usize, H: Host + ?Sized>(

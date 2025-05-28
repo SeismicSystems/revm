@@ -4,7 +4,7 @@ use crate::{
     FrameResult, ItemOrResult,
 };
 use context::result::FromStringError;
-use context::{JournalOutput, LocalContextTr, TransactionType};
+use context::{ChainStorageConfigTr, JournalOutput, LocalContextTr, TransactionType};
 use context_interface::context::ContextError;
 use context_interface::ContextTr;
 use context_interface::{
@@ -32,6 +32,9 @@ impl<
 {
 }
 
+pub type HandlerStorageValue<H> =
+    <<<<H as Handler>::Evm as EvmTr>::Context as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue;
+
 /// The main implementation of Ethereum Mainnet transaction execution.
 ///
 /// The [`Handler::run`] method serves as the entry point for execution and provides
@@ -52,7 +55,7 @@ impl<
 /// occurs during execution.
 pub trait Handler {
     /// The EVM type containing Context, Instruction, and Precompiles implementations.
-    type Evm: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput>>>;
+    type Evm: EvmTr<Context: ContextTr<Journal: JournalTr<FinalOutput = JournalOutput<<<<Self::Evm as EvmTr>::Context as ContextTr>::Chain as ChainStorageConfigTr>::StorageValue>>>>;
     /// The error type returned by this handler.
     type Error: EvmTrError<Self::Evm>;
     /// The Frame type containing data for frame execution. Supports Call, Create and EofCreate frames.
@@ -77,7 +80,7 @@ pub trait Handler {
     fn run(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         // Run inner handler and catch all errors to handle cleanup.
         match self.run_without_catch_error(evm) {
             Ok(output) => Ok(output),
@@ -95,7 +98,7 @@ pub trait Handler {
     fn run_system_call(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         // dummy values that are not used.
         let init_and_floor_gas = InitialAndFloorGas::new(0, 0);
         // call execution and than output.
@@ -118,7 +121,7 @@ pub trait Handler {
     fn run_without_catch_error(
         &mut self,
         evm: &mut Self::Evm,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         let init_and_floor_gas = self.validate(evm)?;
         let eip7702_refund = self.pre_execution(evm)? as i64;
         let exec_result = self.execution(evm, &init_and_floor_gas)?;
@@ -194,7 +197,7 @@ pub trait Handler {
         mut exec_result: FrameResult,
         init_and_floor_gas: InitialAndFloorGas,
         eip7702_gas_refund: i64,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         // Calculate final refund and add EIP-7702 refund to gas.
         self.refund(evm, &mut exec_result, eip7702_gas_refund);
         // Ensure gas floor is met and minimum floor gas is spent.
@@ -465,7 +468,7 @@ pub trait Handler {
         &self,
         evm: &mut Self::Evm,
         result: <Self::Frame as Frame>::FrameResult,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         match core::mem::replace(evm.ctx().error(), Ok(())) {
             Err(ContextError::Db(e)) => return Err(e.into()),
             Err(ContextError::Custom(e)) => return Err(Self::Error::from_string(e)),
@@ -490,7 +493,7 @@ pub trait Handler {
         &self,
         evm: &mut Self::Evm,
         error: Self::Error,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+    ) -> Result<ResultAndState<Self::HaltReason, HandlerStorageValue<Self>>, Self::Error> {
         // clean up local context. Initcode cache needs to be discarded.
         evm.ctx().local().clear();
         // Clean up journal state if error occurs

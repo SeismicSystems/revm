@@ -1,22 +1,22 @@
-use primitives::{HashMap, StorageKey, StorageValue};
+use primitives::{HashMap, StorageKey, StorageValue, StorageValueTr};
 use state::{AccountInfo, EvmStorageSlot};
 
 // Plain account of StateDatabase.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PlainAccount {
+pub struct PlainAccount<SV: StorageValueTr= StorageValue> {
     pub info: AccountInfo,
-    pub storage: PlainStorage,
+    pub storage: PlainStorage<SV>,
 }
 
-impl PlainAccount {
-    pub fn new_empty_with_storage(storage: PlainStorage) -> Self {
+impl<SV: StorageValueTr> PlainAccount<SV> {
+    pub fn new_empty_with_storage(storage: PlainStorage<SV>) -> Self {
         Self {
             info: AccountInfo::default(),
             storage,
         }
     }
 
-    pub fn into_components(self) -> (AccountInfo, PlainStorage) {
+    pub fn into_components(self) -> (AccountInfo, PlainStorage<SV>) {
         (self.info, self.storage)
     }
 }
@@ -24,26 +24,26 @@ impl PlainAccount {
 /// This type keeps track of the current value of a storage slot.
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct StorageSlot {
+pub struct StorageSlot<SV: StorageValueTr = StorageValue> {
     /// The value of the storage slot before it was changed.
     ///
     /// When the slot is first loaded, this is the original value.
     ///
     /// If the slot was not changed, this is equal to the present value.
-    pub previous_or_original_value: StorageValue,
+    pub previous_or_original_value: SV,
     /// When loaded with sload present value is set to original value
-    pub present_value: StorageValue,
+    pub present_value: SV,
 }
 
-impl From<EvmStorageSlot> for StorageSlot {
-    fn from(value: EvmStorageSlot) -> Self {
+impl<SV: StorageValueTr> From<EvmStorageSlot<SV>> for StorageSlot<SV> {
+    fn from(value: EvmStorageSlot<SV>) -> Self {
         Self::new_changed(value.original_value, value.present_value)
     }
 }
 
-impl StorageSlot {
+impl<SV: StorageValueTr> StorageSlot<SV> {
     /// Creates a new _unchanged_ `StorageSlot` for the given value.
-    pub fn new(original: StorageValue) -> Self {
+    pub fn new(original: SV) -> Self {
         Self {
             previous_or_original_value: original,
             present_value: original,
@@ -52,8 +52,8 @@ impl StorageSlot {
 
     /// Creates a new _changed_ `StorageSlot`.
     pub fn new_changed(
-        previous_or_original_value: StorageValue,
-        present_value: StorageValue,
+        previous_or_original_value: SV,
+        present_value: SV,
     ) -> Self {
         Self {
             previous_or_original_value,
@@ -67,12 +67,12 @@ impl StorageSlot {
     }
 
     /// Returns the original value of the storage slot.
-    pub fn original_value(&self) -> StorageValue {
+    pub fn original_value(&self) -> SV {
         self.previous_or_original_value
     }
 
     /// Returns the current value of the storage slot.
-    pub fn present_value(&self) -> StorageValue {
+    pub fn present_value(&self) -> SV {
         self.present_value
     }
 }
@@ -80,17 +80,17 @@ impl StorageSlot {
 /// This storage represent values that are before block changed.
 ///
 /// Note: Storage that we get EVM contains original values before block changed.
-pub type StorageWithOriginalValues = HashMap<StorageKey, StorageSlot>;
+pub type StorageWithOriginalValues<SV = StorageValue> = HashMap<StorageKey, StorageSlot<SV>>;
 
 /// Simple plain storage that does not have previous value.
 /// This is used for loading from database, cache and for bundle state.
-pub type PlainStorage = HashMap<StorageKey, StorageValue>;
+pub type PlainStorage<SV = StorageValue> = HashMap<StorageKey, SV>;
 
-impl From<AccountInfo> for PlainAccount {
+impl From<AccountInfo> for PlainAccount<StorageValue> {
     fn from(info: AccountInfo) -> Self {
         Self {
             info,
-            storage: HashMap::default(),
+            storage: PlainStorage::<StorageValue>::default(),
         }
     }
 }

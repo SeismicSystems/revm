@@ -9,6 +9,7 @@ pub use context_interface::*;
 
 pub mod block;
 pub mod cfg;
+pub mod chain;
 pub mod context;
 pub mod evm;
 pub mod journal;
@@ -17,6 +18,7 @@ pub mod tx;
 
 pub use block::BlockEnv;
 pub use cfg::{Cfg, CfgEnv};
+pub use chain::EvmStorageConfig;
 pub use context::*;
 pub use evm::Evm;
 pub use journal::*;
